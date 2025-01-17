@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken")
 const env = require("dotenv")
 const mongoose = require("mongoose")
 const bcrypt = require("bcryptjs")
+const { default: axios } = require("axios")
 // const ADMIN_SECRET_KEY= process.env.JWT_SECRET_KEY 
 env.config()
 
@@ -178,5 +179,60 @@ module.exports.userlogin = async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
+    }
+};
+
+
+module.exports.useraccount = async (req, res) => {
+    const { AccountNumber, Bankcode } = req.body;
+
+    // Input Validation
+    if (!AccountNumber || !Bankcode) {
+        return res.status(400).json({ status: false, message: "All fields are required." });
+    }
+
+    if (AccountNumber.length !== 10) {
+        return res.status(400).json({ status: false, message: "Account number must be 10 digits." });
+    }
+
+    try {
+        const response = await axios.get(
+            `https://api.paystack.co/bank/resolve?account_number=${AccountNumber}&bank_code=${Bankcode}&currency=NGN`, 
+            {
+                headers: {
+                    Authorization: `Bearer ${process.env.API_SECRET}`
+                }
+            }
+        );
+
+        // Check API response status
+        if (response.status !== 200) {
+            console.log("Failed to validate account");
+            return res.status(response.status).json({ status: false, message: "Failed to validate account" });
+        }
+
+        // Extract account name from the response
+        const accountName = response.data.data.account_name;
+        console.log("NAme on account", accountName);
+        
+        // Respond with the validated account name
+        res.status(200).json({
+            status: true,
+            message: "Account validated successfully.",
+            accountName
+        });
+    } catch (err) {
+        console.error("Error occurred", err.message);
+
+        // Handle specific errors (e.g., network issues, invalid API key)
+        if (err.response) {
+            return res.status(err.response.status).json({
+                status: false,
+                message: err.response.data.message || "Failed to validate account"
+            });
+        }
+
+        // Default to internal server error
+        res.status(500).json({ status: false, error: err.message || "Internal Server Error" });
     }
 };
