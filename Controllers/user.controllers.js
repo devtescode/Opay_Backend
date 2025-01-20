@@ -215,7 +215,6 @@ module.exports.useraccount = async (req, res) => {
         const accountName = response.data.data.account_name;
         console.log("NAme on account", accountName);
         
-        // Respond with the validated account name
         res.status(200).json({
             status: true,
             message: "Account validated successfully.",
