@@ -44,7 +44,7 @@ app.use('/useropay', userRoutes);
 
 // Default Route
 app.get('/', (req, res) => {
-    res.status(200).json({message: 'Welcome to Datasite'});
+    res.status(200).json({message: 'Welcome to Opayuser'});
 });
 
 // Catch-all Error Handler
