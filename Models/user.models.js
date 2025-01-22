@@ -25,6 +25,14 @@ let schema = mongoose.Schema({
     unique: true,
     trim: true,
   },
+  fullname: {
+    type: String,
+    required: function () {
+      return this.role === 'user'; // Make username required only for users
+    },
+    unique: true,
+    trim: true,
+  },
   phoneNumber: {
     type: String,
     required: function () {

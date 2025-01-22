@@ -91,7 +91,7 @@ module.exports.adminlogin = async (req, res) => {
 
 module.exports.createUser = async (req, res) => {
     try {
-        const { username, phoneNumber, password, role, email } = req.body;
+        const { username, fullname, phoneNumber, password, role, email } = req.body;
 
         // Validate input based on the role
         if (role === 'admin' && !email) {
@@ -100,7 +100,7 @@ module.exports.createUser = async (req, res) => {
 
         if (role === 'user') {
             // Ensure username and phone number are required for users
-            if (!username || !phoneNumber) {
+            if (!username || !phoneNumber || !fullname) {
                 return res.status(400).json({ message: 'Username and phone number are required for users.' });
             }
         }
@@ -115,7 +115,7 @@ module.exports.createUser = async (req, res) => {
         }
 
         // Create the user with role-specific validation (password hashing will be handled by the model)
-        const newUser = new Userschema({ username, phoneNumber, password, role, email });
+        const newUser = new Userschema({ username, phoneNumber, password, role, email, fullname });
 
         // Save the new user
         await newUser.save();
@@ -169,11 +169,12 @@ module.exports.userlogin = async (req, res) => {
         // Send success response
         res.status(200).json({
             message: 'Login successful',
-            token, // Optional: Use this for authorization
+            token,
             user: {
                 username: matchedUser.username,
                 phoneNumber: matchedUser.phoneNumber,
-                role: matchedUser.role // Include the role (user/admin)
+                role: matchedUser.role,
+                fullname: matchedUser.fullname
             },
         });
     } catch (error) {
