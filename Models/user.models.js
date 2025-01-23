@@ -22,7 +22,8 @@ let schema = mongoose.Schema({
     required: function () {
       return this.role === 'user'; // Make username required only for users
     },
-    unique: true,
+    // unique: true,
+    // sparse: true, // Allows multiple null values
     trim: true,
   },
   fullname: {
@@ -30,7 +31,7 @@ let schema = mongoose.Schema({
     required: function () {
       return this.role === 'user'; // Make username required only for users
     },
-    unique: true,
+    // unique: true,
     trim: true,
   },
   phoneNumber: {
@@ -38,9 +39,52 @@ let schema = mongoose.Schema({
     required: function () {
       return this.role === 'user'; // Make phoneNumber required only for users
     },
-    unique: true,
+    // unique: true,
   },
 }, { timestamps: true });
+
+
+// schema.index({ username: 1 }, { unique: true, partialFilterExpression: { username: { $exists: true, $ne: null } } });
+// schema.index({ fullname: 1 }, { unique: true, partialFilterExpression: { fullname: { $exists: true, $ne: null } } });
+// schema.index({ phoneNumber: 1 }, { unique: true, partialFilterExpression: { phoneNumber: { $exists: true, $ne: null } } });
+
+
+const transactionSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'useropay',
+      required: true,
+    },
+    bankName: {
+      type: String,
+      required: true,
+    },
+    accountNumber: {
+      type: String,
+      required: true,
+    },
+    accountName: {
+      type: String,
+      required: true,
+    },
+    amount: {
+      type: Number,
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ['success', 'pending', 'failed'], // Optional: Track transaction status
+      default: 'success',
+    },
+
+  },
+  { timestamps: true }
+);
+
+
+
+
 
 // Pre-save hook to hash the password
 const saltRounds = 10;
@@ -74,4 +118,7 @@ schema.methods.compareUser = async function (userPass) {
 };
 
 const Userschema = mongoose.model("useropay", schema);
-module.exports = { Userschema };
+const Transaction = mongoose.model("Transaction", transactionSchema);
+
+// module.exports = mongoose.model('Transaction', transactionSchema);
+module.exports = { Userschema, Transaction };

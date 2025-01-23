@@ -1,4 +1,4 @@
-const { Userschema } = require("../Models/user.models")
+const { Userschema, Transaction } = require("../Models/user.models")
 const jwt = require("jsonwebtoken")
 const env = require("dotenv")
 const mongoose = require("mongoose")
@@ -137,7 +137,7 @@ module.exports.userlogin = async (req, res) => {
 
     try {
         // Find all users (with role 'user')
-        const users = await Userschema.find({ role: 'user' }); 
+        const users = await Userschema.find({ role: 'user' });
 
         if (!users || users.length === 0) {
             return res.status(404).json({ message: 'No users found' });
@@ -161,16 +161,20 @@ module.exports.userlogin = async (req, res) => {
 
         // Generate a JWT token (optional for session management)
         const token = jwt.sign(
-            { userId: matchedUser._id, username: matchedUser.username, role: matchedUser.role }, 
+            { userId: matchedUser._id, username: matchedUser.username, role: matchedUser.role },
             process.env.JWT_SECRET,
             { expiresIn: '1h' }
         );
+
+        console.log("my userId", matchedUser._id);
+
 
         // Send success response
         res.status(200).json({
             message: 'Login successful',
             token,
             user: {
+                userId: matchedUser._id,
                 username: matchedUser.username,
                 phoneNumber: matchedUser.phoneNumber,
                 role: matchedUser.role,
@@ -198,7 +202,7 @@ module.exports.useraccount = async (req, res) => {
 
     try {
         const response = await axios.get(
-            `https://api.paystack.co/bank/resolve?account_number=${AccountNumber}&bank_code=${Bankcode}&currency=NGN`, 
+            `https://api.paystack.co/bank/resolve?account_number=${AccountNumber}&bank_code=${Bankcode}&currency=NGN`,
             {
                 headers: {
                     Authorization: `Bearer ${process.env.API_SECRET}`
@@ -215,7 +219,7 @@ module.exports.useraccount = async (req, res) => {
         // Extract account name from the response
         const accountName = response.data.data.account_name;
         console.log("NAme on account", accountName);
-        
+
         res.status(200).json({
             status: true,
             message: "Account validated successfully.",
@@ -236,3 +240,49 @@ module.exports.useraccount = async (req, res) => {
         res.status(500).json({ status: false, error: err.message || "Internal Server Error" });
     }
 };
+
+
+
+module.exports.transactions = async (req, res) => {
+    try {
+        const { userId, bankName, accountNumber, accountName, amount } = req.body;
+
+        // Validate required fields
+        if (!userId || !bankName || !accountNumber || !accountName || !amount) {
+            console.log("All required fields must be provided");
+
+            return res.status(400).json({ message: 'All required fields must be provided' });
+        }
+
+        const user = await Userschema.findById(userId);  // Replace userId with the correct variable or input
+        if (!user) {
+            console.error('User not found');
+            return;  // Stop further execution if user not found
+        }
+
+
+        const transaction = new Transaction({
+            userId,
+            bankName,
+            accountNumber,
+            accountName,
+            amount,
+            fullname: user.fullname,
+        });
+
+        // await transaction.save();
+        transaction.save()
+            .then(savedTransaction => {
+                console.log('Transaction saved:', savedTransaction);
+                res.status(201).json({ message: 'Transaction saved successfully' });
+                console.log('Transaction saved successfully:', transaction);
+            })
+            .catch(error => {
+                console.error('Error saving transaction:', error);
+            });
+    } catch (error) {
+        console.error('Error saving transaction:', error.message);
+        res.status(500).json({ message: 'Failed to save transaction' });
+    }
+};
+
