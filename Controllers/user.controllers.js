@@ -286,3 +286,15 @@ module.exports.transactions = async (req, res) => {
     }
 };
 
+module.exports.getransactions = async (req, res)=>{
+    try {
+        const { userId } = req.params; // Assuming you pass userId in the URL
+        const transactions = await Transaction.find({ userId }).sort({ createdAt: -1 });
+        res.status(200).json(transactions);
+        console.log(transactions);
+        
+      } catch (error) {
+        console.error('Error fetching transaction history:', error);
+        res.status(500).json({ message: 'Failed to fetch transaction history' });
+      }
+}
