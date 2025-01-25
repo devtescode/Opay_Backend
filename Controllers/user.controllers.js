@@ -299,3 +299,26 @@ module.exports.getransactions = async (req, res)=>{
       }
 }
 
+module.exports.getallusers = async (req, res)=>{
+    try {
+        const users = await Userschema.find({}, "fullname username phoneNumber");
+        res.status(200).json(users);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        res.status(500).json({ message: "Failed to fetch users", error });
+      }
+}
+
+module.exports.gettransactions = async (req, res)=>{
+    const { userId } = req.params;
+
+    try {
+      const transactions = await Transaction.find({ userId }).sort({ createdAt: -1 }); // Sort by newest first
+      res.status(200).json(transactions);
+    //   console.log("get transactions",transactions);
+      
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      res.status(500).json({ message: "Failed to fetch transactions." });
+    }   
+}
