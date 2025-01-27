@@ -83,6 +83,31 @@ const transactionSchema = new mongoose.Schema(
 );
 
 
+const transactionDetailsSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      ref: "Transaction",
+    },
+    accountName: {
+      type: String,
+      required: true,
+    },
+    accountNumber: {
+      type: String,
+      required: true,
+    },
+    bankName: {
+      type: String,
+      required: true,
+    },
+  },
+  { timestamps: true }
+);
+
+
+
 
 
 
@@ -119,6 +144,7 @@ schema.methods.compareUser = async function (userPass) {
 
 const Userschema = mongoose.model("useropay", schema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
+const RecentTransaction =  mongoose.model("recentdetail", transactionDetailsSchema);
 
 // module.exports = mongoose.model('Transaction', transactionSchema);
-module.exports = { Userschema, Transaction };
+module.exports = { Userschema, Transaction, RecentTransaction };

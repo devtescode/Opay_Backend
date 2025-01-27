@@ -1,4 +1,4 @@
-const { Userschema, Transaction } = require("../Models/user.models")
+const { Userschema, Transaction, RecentTransaction } = require("../Models/user.models")
 const jwt = require("jsonwebtoken")
 const env = require("dotenv")
 const mongoose = require("mongoose")
@@ -218,7 +218,7 @@ module.exports.useraccount = async (req, res) => {
 
         // Extract account name from the response
         const accountName = response.data.data.account_name;
-        console.log("NAme on account", accountName);
+        // console.log("NAme on account", accountName);
 
         res.status(200).json({
             status: true,
@@ -286,57 +286,138 @@ module.exports.transactions = async (req, res) => {
     }
 };
 
-module.exports.getransactions = async (req, res)=>{
+module.exports.getransactions = async (req, res) => {
     try {
         const { userId } = req.params; // Assuming you pass userId in the URL
         const transactions = await Transaction.find({ userId }).sort({ createdAt: -1 });
         res.status(200).json(transactions);
         console.log(transactions);
-        
-      } catch (error) {
+
+    } catch (error) {
         console.error('Error fetching transaction history:', error);
         res.status(500).json({ message: 'Failed to fetch transaction history' });
-      }
+    }
 }
 
-module.exports.getallusers = async (req, res)=>{
+module.exports.getallusers = async (req, res) => {
     try {
         const users = await Userschema.find({}, "fullname username phoneNumber");
         res.status(200).json(users);
-      } catch (error) {
+    } catch (error) {
         console.error("Error fetching users:", error);
         res.status(500).json({ message: "Failed to fetch users", error });
-      }
+    }
 }
 
-module.exports.gettransactions = async (req, res)=>{
+module.exports.gettransactions = async (req, res) => {
     const { userId } = req.params;
 
     try {
-      const transactions = await Transaction.find({ userId }).sort({ createdAt: -1 }); // Sort by newest first
-      res.status(200).json(transactions);
-    //   console.log("get transactions",transactions);
-      
+        const transactions = await Transaction.find({ userId }).sort({ createdAt: -1 }); // Sort by newest first
+        res.status(200).json(transactions);
+        //   console.log("get transactions",transactions);
+
     } catch (error) {
-      console.error("Error fetching transactions:", error);
-      res.status(500).json({ message: "Failed to fetch transactions." });
-    }   
+        console.error("Error fetching transactions:", error);
+        res.status(500).json({ message: "Failed to fetch transactions." });
+    }
 }
 
-module.exports.getCounts = async(req, res)=>{
+module.exports.getCounts = async (req, res) => {
     try {
         const userCount = await Userschema.countDocuments();
         const transactionCount = await Transaction.countDocuments();
         const totalCount = userCount + transactionCount; // Sum of users and transactions
-    
+
         res.status(200).json({
-          userCount,
-          transactionCount,
-          totalCount,
+            userCount,
+            transactionCount,
+            totalCount,
         });
-      } catch (error) {
+    } catch (error) {
         console.error('Error fetching counts:', error);
         res.status(500).json({ message: 'Failed to fetch counts.' });
-      }
-    
+    }
 }
+module.exports.saveRecentTransaction = async (req, res) => {
+    const { userId, accountDetails } = req.body;
+  
+    try {
+      // Validate the required fields
+      if (!userId || !accountDetails) {
+        return res.status(400).json({ message: "User ID and account details are required." });
+      }
+  
+      const { accountName, accountNumber, bankName } = accountDetails;
+  
+      // Additional validation for accountDetails
+      if (!accountName || !accountNumber || !bankName) {
+        return res.status(400).json({ message: "All account details are required." });
+      }
+  
+      // Create a new transaction record
+      const newTransaction = new RecentTransaction({
+        userId,
+        accountName,
+        accountNumber,
+        bankName,
+      });
+  
+      console.log("New Transaction details:", newTransaction);
+  
+      // Save the transaction to the database
+      await newTransaction.save();
+  
+      return res.status(201).json({
+        message: "Transaction saved successfully!",
+        transaction: newTransaction,
+      });
+    } catch (error) {
+      console.error("Error saving transaction details:", error);
+      return res.status(500).json({ message: "Failed to save transaction details.", error: error.message });
+    }
+  };
+
+
+module.exports.getrecentransaction = async(req, res)=>{
+    const { userId } = req.params;
+    const { showAll } = req.query; // Retrieve 'showAll' from the query parameters
+  
+    try {
+      // Determine the limit based on whether 'showAll' is true
+      const limit = showAll === "true" ? 0 : 3; // 0 means no limit, fetch all transactions if 'showAll' is true
+  
+      // Fetch transactions
+      const transactions = await RecentTransaction.find({ userId })
+        .sort({ createdAt: -1 }) // Sort by creation date, most recent first
+        .limit(limit === 0 ? undefined : limit); // Only limit to 3 unless showAll is true
+        console.log("All recent transactions",transactions)
+      if (!transactions || transactions.length === 0) {
+        return res.status(404).json({ message: "No transactions found." });
+      }
+  
+      return res.status(200).json(transactions); // Return the transactions in the response
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      return res.status(500).json({ message: "Failed to fetch transactions." });
+    }
+    //  
+}
+
+module.exports.deleterecenttransaction = async(req, res) => {
+    try {
+        const { transactionId } = req.params;  // Use the correct parameter name here
+    
+        // Find and delete the transaction
+        const transaction = await RecentTransaction.findByIdAndDelete(transactionId);
+    
+        if (!transaction) {
+            return res.status(404).json({ message: "Transaction not found" });
+        }
+    
+        res.status(200).json({ message: "Transaction deleted successfully" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error deleting transaction" });
+    }
+};
