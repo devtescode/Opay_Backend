@@ -421,3 +421,23 @@ module.exports.deleterecenttransaction = async(req, res) => {
         res.status(500).json({ message: "Error deleting transaction" });
     }
 };
+
+
+module.exports.deleteuserTransaction = async(req, res)=>{
+    const { id } = req.params;
+
+    try {
+        // Find and delete the transaction by ID
+        const deletedTransaction = await Transaction.findByIdAndDelete(id);
+        
+        if (!deletedTransaction) {
+            return res.status(404).json({ message: 'Transaction not found' });
+        }
+        console.log("Transaction deleted successfully");
+        
+        res.status(200).json({ message: 'Transaction deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting transaction:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+}
