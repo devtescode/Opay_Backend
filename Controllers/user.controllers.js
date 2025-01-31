@@ -274,7 +274,7 @@ module.exports.transactions = async (req, res) => {
         transaction.save()
             .then(savedTransaction => {
                 console.log('Transaction saved:', savedTransaction);
-                res.status(201).json({ message: 'Transaction saved successfully' });
+                res.status(201).json({ message: 'Transaction saved successfully',  transactionId: transaction._id });
                 console.log('Transaction saved successfully:', transaction);
             })
             .catch(error => {
@@ -439,5 +439,37 @@ module.exports.deleteuserTransaction = async(req, res)=>{
     } catch (error) {
         console.error('Error deleting transaction:', error);
         res.status(500).json({ message: 'Server error' });
+    }
+}
+
+module.exports.changetransactions = async(req, res)=>{
+    try {
+        const { transactionId } = req.params;
+        const { status } = req.body; // Get the status from the request body
+        console.log(status, transactionId);
+        
+        // Validate that the status is one of the allowed values
+        if (!['success', 'pending', 'failed'].includes(status)) {
+            return res.status(400).json({ message: 'Invalid status value' });
+        }
+
+        // Find and update the transaction's status
+        const transaction = await Transaction.findByIdAndUpdate(
+            transactionId,
+            { status },
+            { new: true } // Return the updated document
+        );
+        console.log("fecthing trna scffo",transaction);
+        
+
+        if (!transaction) {
+            return res.status(404).json({ message: 'Transaction not found' });
+        }
+        console.log("my transactio", transaction);
+        
+        res.status(200).json(transaction);
+    } catch (error) {
+        console.error('Error updating transaction status:', error);
+        res.status(500).json({ message: 'Failed to update transaction status' });
     }
 }
