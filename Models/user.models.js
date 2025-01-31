@@ -74,8 +74,8 @@ const transactionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['success', 'pending', 'failed'], // Optional: Track transaction status
-      default: 'success',
+      enum: ['successful', 'pending', 'failed'], // Optional: Track transaction status
+      default: 'successful',
     },
 
   },

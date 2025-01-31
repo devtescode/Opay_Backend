@@ -449,7 +449,7 @@ module.exports.changetransactions = async(req, res)=>{
         console.log(status, transactionId);
         
         // Validate that the status is one of the allowed values
-        if (!['success', 'pending', 'failed'].includes(status)) {
+        if (!['successful', 'pending', 'failed'].includes(status)) {
             return res.status(400).json({ message: 'Invalid status value' });
         }
 
