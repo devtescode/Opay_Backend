@@ -128,48 +128,98 @@ module.exports.createUser = async (req, res) => {
 };
 
 
+// module.exports.userlogin = async (req, res) => {
+//     const { password } = req.body; // Only password is expected in the body
+
+//     if (!password) {
+//         return res.status(400).json({ message: 'Password is required.' });
+//     }
+
+//     try {
+//         // Find all users (with role 'user')
+//         const users = await Userschema.find({ role: 'user' });
+        
+
+//         if (!users || users.length === 0) {
+//             return res.status(404).json({ message: 'No users found' });
+//         }
+
+//         let matchedUser = null;
+
+//         // Loop through each user and check the password
+//         for (let user of users) {
+//             const isMatch = await bcrypt.compare(password, user.password);
+
+//             if (isMatch) {
+//                 matchedUser = user;
+//                 break; // Stop loop if user is found
+//             }
+//         }
+
+//         if (!matchedUser) {
+//             return res.status(400).json({ message: 'Invalid password' });
+//         }
+
+//         // Generate a JWT token (optional for session management)
+//         const token = jwt.sign(
+//             { userId: matchedUser._id, username: matchedUser.username, role: matchedUser.role },
+//             process.env.JWT_SECRET,
+//             { expiresIn: '1h' }
+//         );
+
+//         console.log("my userId", matchedUser._id);
+
+
+//         // Send success response
+//         res.status(200).json({
+//             message: 'Login successful',
+//             token,
+//             user: {
+//                 userId: matchedUser._id,
+//                 username: matchedUser.username,
+//                 phoneNumber: matchedUser.phoneNumber,
+//                 role: matchedUser.role,
+//                 fullname: matchedUser.fullname
+//             },
+//         });
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ message: 'Server error' });
+//     }
+// };
+
 module.exports.userlogin = async (req, res) => {
-    const { password } = req.body; // Only password is expected in the body
+    const { password } = req.body; 
 
     if (!password) {
         return res.status(400).json({ message: 'Password is required.' });
     }
 
     try {
-        // Find all users (with role 'user')
-        const users = await Userschema.find({ role: 'user' });
+        // Fetch only one user directly by matching the hashed password
+        // const matchedUser = await Userschema.findOne({ role: 'user' });
+        const matchedUser = await Userschema.findOne({ role: 'user' }).lean();
 
-        if (!users || users.length === 0) {
-            return res.status(404).json({ message: 'No users found' });
-        }
-
-        let matchedUser = null;
-
-        // Loop through each user and check the password
-        for (let user of users) {
-            const isMatch = await bcrypt.compare(password, user.password);
-
-            if (isMatch) {
-                matchedUser = user;
-                break; // Stop loop if user is found
-            }
-        }
 
         if (!matchedUser) {
+            return res.status(404).json({ message: 'No user found' });
+        }
+
+        // Check if the password matches
+        const isMatch = await bcrypt.compare(password, matchedUser.password);
+        if (!isMatch) {
             return res.status(400).json({ message: 'Invalid password' });
         }
 
-        // Generate a JWT token (optional for session management)
+        // Generate JWT Token
         const token = jwt.sign(
             { userId: matchedUser._id, username: matchedUser.username, role: matchedUser.role },
             process.env.JWT_SECRET,
             { expiresIn: '1h' }
         );
 
-        console.log("my userId", matchedUser._id);
+        console.log("User ID:", matchedUser._id);
 
-
-        // Send success response
         res.status(200).json({
             message: 'Login successful',
             token,
@@ -181,6 +231,9 @@ module.exports.userlogin = async (req, res) => {
                 fullname: matchedUser.fullname
             },
         });
+        console.log("login successful");
+        
+
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
