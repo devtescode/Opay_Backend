@@ -110,7 +110,6 @@ const transactionDetailsSchema = new mongoose.Schema(
 
 
 
-
 // Pre-save hook to hash the password
 const saltRounds = 10;
 schema.pre("save", async function (next) {

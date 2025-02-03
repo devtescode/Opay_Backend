@@ -1,5 +1,5 @@
 const express = require("express")
-const { userWelcome, adminlogin, createUser, userlogin, useraccount, transactions, getransactions, getallusers, gettransactions, getCounts, saveRecentTransaction, getrecentransaction, deleterecenttransaction, deleteuserTransaction, changetransactions } = require("../Controllers/user.controllers")
+const { userWelcome, adminlogin, createUser, userlogin, useraccount, transactions, getransactions, getallusers, gettransactions, getCounts, saveRecentTransaction, getrecentransaction, deleterecenttransaction, deleteuserTransaction, changetransactions, getlasttwotrnasaction } = require("../Controllers/user.controllers")
 const router = express.Router()
 
 router.get("/user", userWelcome);
@@ -17,5 +17,6 @@ router.get("/getrecentransaction/:userId", getrecentransaction)
 router.delete("/deleterecenttransaction/:transactionId", deleterecenttransaction)
 router.delete("/deleteuserTransaction/:id", deleteuserTransaction)
 router.put("/changetransactions/:transactionId", changetransactions)
+router.get("/getlasttwotrnasaction/:userId", getlasttwotrnasaction)
 
 module.exports = router

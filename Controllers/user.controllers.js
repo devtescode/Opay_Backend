@@ -473,3 +473,12 @@ module.exports.changetransactions = async(req, res)=>{
         res.status(500).json({ message: 'Failed to update transaction status' });
     }
 }
+
+
+module.exports.getlasttwotrnasaction = async(req, res)=>{
+    const { userId } = req.params;
+    const transactions = await Transaction.find({ userId })
+      .sort({ createdAt: -1 }) // Sort by newest
+      .limit(2); // Fetch only the last two
+    res.json(transactions);   
+}
