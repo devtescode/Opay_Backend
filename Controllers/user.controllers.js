@@ -138,7 +138,6 @@ module.exports.userlogin = async (req, res) => {
     try {
         // Find all users (with role 'user')
         const users = await Userschema.find({ role: 'user' });
-        
 
         if (!users || users.length === 0) {
             return res.status(404).json({ message: 'No users found' });
@@ -160,6 +159,11 @@ module.exports.userlogin = async (req, res) => {
             return res.status(400).json({ message: 'Invalid password' });
         }
 
+        // Check if the user is blocked
+        if (matchedUser.blocked) {
+            return res.status(403).json({ message: 'Your account is blocked. Please contact support.' });
+        }
+
         // Generate a JWT token (optional for session management)
         const token = jwt.sign(
             { userId: matchedUser._id, username: matchedUser.username, role: matchedUser.role },
@@ -168,7 +172,6 @@ module.exports.userlogin = async (req, res) => {
         );
 
         console.log("my userId", matchedUser._id);
-
 
         // Send success response
         res.status(200).json({
@@ -534,4 +537,50 @@ module.exports.getlasttwotrnasaction = async(req, res)=>{
       .sort({ createdAt: -1 }) // Sort by newest
       .limit(2); // Fetch only the last two
     res.json(transactions);   
+} 
+
+
+module.exports.blockUser = async(req, res)=>{
+    try {
+        const { id } = req.params;
+
+        // Find the user by ID and update the 'blocked' field
+        const user = await Userschema.findByIdAndUpdate(id, { blocked: true }, { new: true });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Ensure that the user _id is returned as a string
+        const userResponse = { ...user.toObject(), _id: user._id.toString() };
+
+        console.log('User blocked successfully');
+        res.status(200).json({ message: 'User blocked successfully', user: userResponse });
+    } catch (error) {
+        console.error('Error blocking user:', error);
+        res.status(500).json({ message: 'Error blocking user', error });
+    }
+}
+
+module.exports.unblockUser = async(req,res)=>{
+    try {
+        const { id } = req.params;
+
+        // Find the user by ID and update the 'blocked' field
+        const user = await Userschema.findByIdAndUpdate(id, { blocked: false }, { new: true });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Ensure that the user _id is returned as a string
+        const userResponse = { ...user.toObject(), _id: user._id.toString() };
+
+        console.log("User unblocked successfully");
+        res.status(200).json({ message: 'User unblocked successfully', user: userResponse });
+    } catch (error) {
+        console.error('Error unblocking user:', error);
+        res.status(500).json({ message: 'Error unblocking user', error });
+    }
+
 }

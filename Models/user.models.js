@@ -41,6 +41,7 @@ let schema = mongoose.Schema({
     },
     // unique: true,
   },
+  blocked: { type: Boolean, default: false },
 }, { timestamps: true });
 
 
