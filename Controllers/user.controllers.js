@@ -1,4 +1,5 @@
 const { Userschema, Transaction, RecentTransaction } = require("../Models/user.models")
+const SessionSchema = require("../Models/SessionSchema"); // Import session model
 const jwt = require("jsonwebtoken")
 const env = require("dotenv")
 const mongoose = require("mongoose")
@@ -6,6 +7,7 @@ const bcrypt = require("bcryptjs")
 const { default: axios } = require("axios")
 // const ADMIN_SECRET_KEY= process.env.JWT_SECRET_KEY 
 env.config()
+
 
 
 
@@ -128,9 +130,11 @@ module.exports.createUser = async (req, res) => {
 };
 
 
-module.exports.userlogin = async (req, res) => {
-    const { password } = req.body; // Only password is expected in the body
 
+module.exports.userlogin = async (req, res) => {
+    const { password, deviceInfo } = req.body; // Expect device info in request
+    console.log("Device Info:", deviceInfo);
+    
     if (!password) {
         return res.status(400).json({ message: 'Password is required.' });
     }
@@ -148,7 +152,6 @@ module.exports.userlogin = async (req, res) => {
         // Loop through each user and check the password
         for (let user of users) {
             const isMatch = await bcrypt.compare(password, user.password);
-
             if (isMatch) {
                 matchedUser = user;
                 break; // Stop loop if user is found
@@ -164,14 +167,21 @@ module.exports.userlogin = async (req, res) => {
             return res.status(403).json({ message: 'Your account is blocked. Please contact support.' });
         }
 
-        // Generate a JWT token (optional for session management)
+        // Generate a JWT token
         const token = jwt.sign(
             { userId: matchedUser._id, username: matchedUser.username, role: matchedUser.role },
             process.env.JWT_SECRET,
             { expiresIn: '1h' }
         );
 
-        console.log("my userId", matchedUser._id);
+        console.log("User ID:", matchedUser._id);
+
+        // **✅ Save user session to MongoDB**
+        await SessionSchema.create({
+            userId: matchedUser._id,
+            deviceInfo: deviceInfo || "Unknown Device",
+            loggedInAt: new Date(),
+        });
 
         // Send success response
         res.status(200).json({
@@ -182,7 +192,9 @@ module.exports.userlogin = async (req, res) => {
                 username: matchedUser.username,
                 phoneNumber: matchedUser.phoneNumber,
                 role: matchedUser.role,
-                fullname: matchedUser.fullname
+                fullname: matchedUser.fullname,
+                deviceInfo,
+                loggedInAt: new Date(),
             },
         });
     } catch (error) {
@@ -582,5 +594,31 @@ module.exports.unblockUser = async(req,res)=>{
         console.error('Error unblocking user:', error);
         res.status(500).json({ message: 'Error unblocking user', error });
     }
-
 }
+
+module.exports.activesessions = async (req, res) => {
+    try {
+        const sessions = await SessionSchema.find().populate('userId', 'username');
+        console.log("Active user", sessions);
+
+        if (sessions.length === 0) {
+            return res.status(404).json({ message: 'No active sessions found' });
+        }
+
+        // Filter out duplicate deviceInfo entries
+        const uniqueSessions = [];
+        const seenDevices = new Set();
+
+        for (const session of sessions) {
+            if (!seenDevices.has(session.deviceInfo)) {
+                seenDevices.add(session.deviceInfo);
+                uniqueSessions.push(session);
+            }
+        }
+
+        res.status(200).json(uniqueSessions);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};

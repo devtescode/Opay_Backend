@@ -42,6 +42,8 @@ let schema = mongoose.Schema({
     // unique: true,
   },
   blocked: { type: Boolean, default: false },
+  deviceInfo: String,
+  loggedInAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 
 
