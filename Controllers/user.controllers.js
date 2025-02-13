@@ -176,12 +176,26 @@ module.exports.userlogin = async (req, res) => {
 
         console.log("User ID:", matchedUser._id);
 
-        // **✅ Save user session to MongoDB**
-        await SessionSchema.create({
-            userId: matchedUser._id,
-            deviceInfo: deviceInfo || "Unknown Device",
-            loggedInAt: new Date(),
-        });
+        // **✅ Only save session if login is successful**
+        if (token) {
+            const existingSession = await SessionSchema.findOne({
+                userId: matchedUser._id,
+                deviceInfo: deviceInfo || "Unknown Device",
+            });
+
+            if (existingSession) {
+                // Update only the `loggedInAt` timestamp instead of creating a new entry
+                existingSession.loggedInAt = new Date();
+                await existingSession.save();
+            } else {
+                // Create a new session if no matching device session exists
+                await SessionSchema.create({
+                    userId: matchedUser._id,
+                    deviceInfo: deviceInfo || "Unknown Device",
+                    loggedInAt: new Date(),
+                });
+            }
+        }
 
         // Send success response
         res.status(200).json({
@@ -202,6 +216,7 @@ module.exports.userlogin = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
 
 // module.exports.userlogin = async (req, res) => {
 //     const { password } = req.body; 
@@ -605,16 +620,20 @@ module.exports.activesessions = async (req, res) => {
             return res.status(404).json({ message: 'No active sessions found' });
         }
 
-        // Filter out duplicate deviceInfo entries
-        const uniqueSessions = [];
-        const seenDevices = new Set();
+        // Group sessions by deviceInfo and keep the latest session per device
+        const deviceSessionsMap = new Map();
 
         for (const session of sessions) {
-            if (!seenDevices.has(session.deviceInfo)) {
-                seenDevices.add(session.deviceInfo);
-                uniqueSessions.push(session);
+            if (
+                !deviceSessionsMap.has(session.deviceInfo) || 
+                new Date(session.loggedInAt) > new Date(deviceSessionsMap.get(session.deviceInfo).loggedInAt)
+            ) {
+                deviceSessionsMap.set(session.deviceInfo, session);
             }
         }
+
+        // Convert the Map values to an array
+        const uniqueSessions = Array.from(deviceSessionsMap.values());
 
         res.status(200).json(uniqueSessions);
     } catch (error) {
