@@ -422,6 +422,7 @@ module.exports.getCounts = async (req, res) => {
         res.status(500).json({ message: 'Failed to fetch counts.' });
     }
 }
+
 module.exports.saveRecentTransaction = async (req, res) => {
     const { userId, accountDetails } = req.body;
   
@@ -438,17 +439,31 @@ module.exports.saveRecentTransaction = async (req, res) => {
         return res.status(400).json({ message: "All account details are required." });
       }
   
-      // Create a new transaction record
+      // Check if a transaction with the same userId and account details already exists
+      const existingTransaction = await RecentTransaction.findOne({ 
+        userId, 
+        accountNumber, 
+        bankName 
+      });
+  
+      if (existingTransaction) {
+        // Update the existing transaction timestamp instead of creating a duplicate
+        existingTransaction.updatedAt = new Date();
+        await existingTransaction.save();
+        return res.status(200).json({ message: "Transaction updated as recent.", transaction: existingTransaction });
+      }
+  
+      // If no duplicate exists, save a new transaction
       const newTransaction = new RecentTransaction({
         userId,
         accountName,
         accountNumber,
         bankName,
+        createdAt: new Date(),
       });
   
       console.log("New Transaction details:", newTransaction);
   
-      // Save the transaction to the database
       await newTransaction.save();
   
       return res.status(201).json({
@@ -460,6 +475,7 @@ module.exports.saveRecentTransaction = async (req, res) => {
       return res.status(500).json({ message: "Failed to save transaction details.", error: error.message });
     }
   };
+  
 
 
 module.exports.getrecentransaction = async(req, res)=>{
