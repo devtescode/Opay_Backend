@@ -176,28 +176,26 @@ module.exports.userlogin = async (req, res) => {
 
         console.log("User ID:", matchedUser._id);
 
-        // **✅ Only save session if login is successful**
-        if (token) {
-            const existingSession = await SessionSchema.findOne({
+        // **✅ Save or update session**
+        let session = await SessionSchema.findOne({
+            userId: matchedUser._id,
+            deviceInfo: deviceInfo || "Unknown Device",
+        });
+
+        if (session) {
+            // Update the session timestamp
+            session.loggedInAt = new Date();
+            await session.save();
+        } else {
+            // Create a new session if no existing one
+            session = await SessionSchema.create({
                 userId: matchedUser._id,
                 deviceInfo: deviceInfo || "Unknown Device",
+                loggedInAt: new Date(),
             });
-
-            if (existingSession) {
-                // Update only the `loggedInAt` timestamp instead of creating a new entry
-                existingSession.loggedInAt = new Date();
-                await existingSession.save();
-            } else {
-                // Create a new session if no matching device session exists
-                await SessionSchema.create({
-                    userId: matchedUser._id,
-                    deviceInfo: deviceInfo || "Unknown Device",
-                    loggedInAt: new Date(),
-                });
-            }
         }
 
-        // Send success response
+        // Send success response with sessionId
         res.status(200).json({
             message: 'Login successful',
             token,
@@ -208,7 +206,8 @@ module.exports.userlogin = async (req, res) => {
                 role: matchedUser.role,
                 fullname: matchedUser.fullname,
                 deviceInfo,
-                loggedInAt: new Date(),
+                loggedInAt: session.loggedInAt, // Ensure consistency
+                sessionId: session._id, // ✅ Include sessionId in response
             },
         });
     } catch (error) {
@@ -216,6 +215,7 @@ module.exports.userlogin = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
 
 
 // module.exports.userlogin = async (req, res) => {
@@ -655,5 +655,38 @@ module.exports.activesessions = async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const { getSocket } = require('../socket'); // Import getSocket function
+
+module.exports.logoutsession = async (req, res) => {
+    const { sessionId } = req.params;
+
+    try {
+        // Ensure that io is initialized before using it
+        const io = getSocket(); // This will throw an error if socket is not initialized
+
+        // Find the session from the database
+        const session = await SessionSchema.findById(sessionId);
+        console.log("All session:", session);
+
+        if (!session) {
+            return res.status(404).json({ message: "Session not found" });
+        }
+
+        // Delete the session from the database
+        await SessionSchema.findByIdAndDelete(sessionId);
+
+        // Emit event to the client-side about the session logout
+            io.emit("sessionLoggedOut", { sessionId });
+            console.log("Session logged out successfully", sessionId);
+
+        // Send response back to the client
+        res.status(200).json({ message: "Session logged out successfully" });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error logging out session" });
     }
 };

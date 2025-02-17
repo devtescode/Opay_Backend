@@ -1,5 +1,5 @@
 const express = require("express")
-const { userWelcome, adminlogin, createUser, userlogin, useraccount, transactions, getransactions, getallusers, gettransactions, getCounts, saveRecentTransaction, getrecentransaction, deleterecenttransaction, deleteuserTransaction, changetransactions, getlasttwotrnasaction, blockUser, unblockUser, activesessions } = require("../Controllers/user.controllers")
+const { userWelcome, adminlogin, createUser, userlogin, useraccount, transactions, getransactions, getallusers, gettransactions, getCounts, saveRecentTransaction, getrecentransaction, deleterecenttransaction, deleteuserTransaction, changetransactions, getlasttwotrnasaction, blockUser, unblockUser, activesessions, logoutsession } = require("../Controllers/user.controllers")
 const router = express.Router()
 
 router.get("/user", userWelcome);
@@ -21,5 +21,6 @@ router.get("/getlasttwotrnasaction/:userId", getlasttwotrnasaction)
 router.put("/blockUser/:id", blockUser)
 router.put("/unblockUser/:id", unblockUser)
 router.get("/activesessions", activesessions)
+router.delete("/logoutsession/:sessionId", logoutsession)
 
 module.exports = router
