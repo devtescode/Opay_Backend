@@ -131,16 +131,20 @@ module.exports.createUser = async (req, res) => {
 
 
 
-module.exports.userlogin = async (req, res) => {
-    const { password, deviceInfo } = req.body; // Expect device info in request
-    console.log("Device Info:", deviceInfo);
-    
+const getClientIP = (req) => {
+    return req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress;
+};
+
+module.exports.userlogin = async (req, res) => { 
+    const { password, deviceInfo, sessionId } = req.body;
+    const clientIP = getClientIP(req); // Get user IP
+    console.log("Device Info:", deviceInfo, "IP:", clientIP);
+
     if (!password) {
         return res.status(400).json({ message: 'Password is required.' });
     }
 
     try {
-        // Find all users (with role 'user')
         const users = await Userschema.find({ role: 'user' });
 
         if (!users || users.length === 0) {
@@ -149,12 +153,11 @@ module.exports.userlogin = async (req, res) => {
 
         let matchedUser = null;
 
-        // Loop through each user and check the password
         for (let user of users) {
             const isMatch = await bcrypt.compare(password, user.password);
             if (isMatch) {
                 matchedUser = user;
-                break; // Stop loop if user is found
+                break;
             }
         }
 
@@ -162,40 +165,40 @@ module.exports.userlogin = async (req, res) => {
             return res.status(400).json({ message: 'Invalid password' });
         }
 
-        // Check if the user is blocked
         if (matchedUser.blocked) {
             return res.status(403).json({ message: 'Your account is blocked. Please contact support.' });
         }
 
-        // Generate a JWT token
+        // 🔹 Check if user already has an active session (ignore device & IP)
+        let existingSession = await SessionSchema.findOne({
+            userId: matchedUser._id
+        });
+
+        if (existingSession && (!sessionId || sessionId !== existingSession._id.toString())) {
+            return res.status(403).json({ 
+                message: "Your account is already logged in on another device. Please log out first."
+            });
+        }
+
+        let session;
+        if (existingSession) {
+            existingSession.loggedInAt = new Date();
+            session = await existingSession.save();
+        } else {
+            session = await SessionSchema.create({
+                userId: matchedUser._id,
+                deviceInfo,
+                ipAddress: clientIP,
+                loggedInAt: new Date(),
+            });
+        }
+
         const token = jwt.sign(
             { userId: matchedUser._id, username: matchedUser.username, role: matchedUser.role },
             process.env.JWT_SECRET,
             { expiresIn: '1h' }
         );
 
-        console.log("User ID:", matchedUser._id);
-
-        // **✅ Save or update session**
-        let session = await SessionSchema.findOne({
-            userId: matchedUser._id,
-            deviceInfo: deviceInfo || "Unknown Device",
-        });
-
-        if (session) {
-            // Update the session timestamp
-            session.loggedInAt = new Date();
-            await session.save();
-        } else {
-            // Create a new session if no existing one
-            session = await SessionSchema.create({
-                userId: matchedUser._id,
-                deviceInfo: deviceInfo || "Unknown Device",
-                loggedInAt: new Date(),
-            });
-        }
-
-        // Send success response with sessionId
         res.status(200).json({
             message: 'Login successful',
             token,
@@ -205,9 +208,7 @@ module.exports.userlogin = async (req, res) => {
                 phoneNumber: matchedUser.phoneNumber,
                 role: matchedUser.role,
                 fullname: matchedUser.fullname,
-                deviceInfo,
-                loggedInAt: session.loggedInAt, // Ensure consistency
-                sessionId: session._id, // ✅ Include sessionId in response
+                sessionId: session._id, // ✅ Ensure one session per user
             },
         });
     } catch (error) {
@@ -215,6 +216,11 @@ module.exports.userlogin = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+
+
+
+// Device Info: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 IP: ::1
 
 
 
@@ -230,7 +236,7 @@ module.exports.userlogin = async (req, res) => {
 //         // const matchedUser = await Userschema.findOne({ role: 'user' });
 //         const matchedUser = await Userschema.findOne({ role: 'user' }).lean();
 
-        
+
 //         if (!matchedUser) {
 //             return res.status(404).json({ message: 'No user found' });
 //         }
@@ -262,7 +268,7 @@ module.exports.userlogin = async (req, res) => {
 //             },
 //         });
 //         console.log("login successful");
-        
+
 
 //     } catch (error) {
 //         console.error(error);
@@ -357,7 +363,7 @@ module.exports.transactions = async (req, res) => {
         transaction.save()
             .then(savedTransaction => {
                 console.log('Transaction saved:', savedTransaction);
-                res.status(201).json({ message: 'Transaction saved successfully',  transactionId: transaction._id });
+                res.status(201).json({ message: 'Transaction saved successfully', transactionId: transaction._id });
                 console.log('Transaction saved successfully:', transaction);
             })
             .catch(error => {
@@ -425,95 +431,95 @@ module.exports.getCounts = async (req, res) => {
 
 module.exports.saveRecentTransaction = async (req, res) => {
     const { userId, accountDetails } = req.body;
-  
+
     try {
-      // Validate the required fields
-      if (!userId || !accountDetails) {
-        return res.status(400).json({ message: "User ID and account details are required." });
-      }
-  
-      const { accountName, accountNumber, bankName } = accountDetails;
-  
-      // Additional validation for accountDetails
-      if (!accountName || !accountNumber || !bankName) {
-        return res.status(400).json({ message: "All account details are required." });
-      }
-  
-      // Check if a transaction with the same userId and account details already exists
-      const existingTransaction = await RecentTransaction.findOne({ 
-        userId, 
-        accountNumber, 
-        bankName 
-      });
-  
-      if (existingTransaction) {
-        // Update the existing transaction timestamp instead of creating a duplicate
-        existingTransaction.updatedAt = new Date();
-        await existingTransaction.save();
-        return res.status(200).json({ message: "Transaction updated as recent.", transaction: existingTransaction });
-      }
-  
-      // If no duplicate exists, save a new transaction
-      const newTransaction = new RecentTransaction({
-        userId,
-        accountName,
-        accountNumber,
-        bankName,
-        createdAt: new Date(),
-      });
-  
-      console.log("New Transaction details:", newTransaction);
-  
-      await newTransaction.save();
-  
-      return res.status(201).json({
-        message: "Transaction saved successfully!",
-        transaction: newTransaction,
-      });
+        // Validate the required fields
+        if (!userId || !accountDetails) {
+            return res.status(400).json({ message: "User ID and account details are required." });
+        }
+
+        const { accountName, accountNumber, bankName } = accountDetails;
+
+        // Additional validation for accountDetails
+        if (!accountName || !accountNumber || !bankName) {
+            return res.status(400).json({ message: "All account details are required." });
+        }
+
+        // Check if a transaction with the same userId and account details already exists
+        const existingTransaction = await RecentTransaction.findOne({
+            userId,
+            accountNumber,
+            bankName
+        });
+
+        if (existingTransaction) {
+            // Update the existing transaction timestamp instead of creating a duplicate
+            existingTransaction.updatedAt = new Date();
+            await existingTransaction.save();
+            return res.status(200).json({ message: "Transaction updated as recent.", transaction: existingTransaction });
+        }
+
+        // If no duplicate exists, save a new transaction
+        const newTransaction = new RecentTransaction({
+            userId,
+            accountName,
+            accountNumber,
+            bankName,
+            createdAt: new Date(),
+        });
+
+        console.log("New Transaction details:", newTransaction);
+
+        await newTransaction.save();
+
+        return res.status(201).json({
+            message: "Transaction saved successfully!",
+            transaction: newTransaction,
+        });
     } catch (error) {
-      console.error("Error saving transaction details:", error);
-      return res.status(500).json({ message: "Failed to save transaction details.", error: error.message });
+        console.error("Error saving transaction details:", error);
+        return res.status(500).json({ message: "Failed to save transaction details.", error: error.message });
     }
-  };
-  
+};
 
 
-module.exports.getrecentransaction = async(req, res)=>{
+
+module.exports.getrecentransaction = async (req, res) => {
     const { userId } = req.params;
     const { showAll } = req.query; // Retrieve 'showAll' from the query parameters
-  
+
     try {
-      // Determine the limit based on whether 'showAll' is true
-      const limit = showAll === "true" ? 0 : 3; // 0 means no limit, fetch all transactions if 'showAll' is true
-  
-      // Fetch transactions
-      const transactions = await RecentTransaction.find({ userId })
-        .sort({ createdAt: -1 }) // Sort by creation date, most recent first
-        .limit(limit === 0 ? undefined : limit); // Only limit to 3 unless showAll is true
-        console.log("All recent transactions",transactions)
-      if (!transactions || transactions.length === 0) {
-        return res.status(404).json({ message: "No transactions found." });
-      }
-  
-      return res.status(200).json(transactions); // Return the transactions in the response
+        // Determine the limit based on whether 'showAll' is true
+        const limit = showAll === "true" ? 0 : 3; // 0 means no limit, fetch all transactions if 'showAll' is true
+
+        // Fetch transactions
+        const transactions = await RecentTransaction.find({ userId })
+            .sort({ createdAt: -1 }) // Sort by creation date, most recent first
+            .limit(limit === 0 ? undefined : limit); // Only limit to 3 unless showAll is true
+        console.log("All recent transactions", transactions)
+        if (!transactions || transactions.length === 0) {
+            return res.status(404).json({ message: "No transactions found." });
+        }
+
+        return res.status(200).json(transactions); // Return the transactions in the response
     } catch (error) {
-      console.error("Error fetching transactions:", error);
-      return res.status(500).json({ message: "Failed to fetch transactions." });
+        console.error("Error fetching transactions:", error);
+        return res.status(500).json({ message: "Failed to fetch transactions." });
     }
     //  
 }
 
-module.exports.deleterecenttransaction = async(req, res) => {
+module.exports.deleterecenttransaction = async (req, res) => {
     try {
         const { transactionId } = req.params;  // Use the correct parameter name here
-    
+
         // Find and delete the transaction
         const transaction = await RecentTransaction.findByIdAndDelete(transactionId);
-    
+
         if (!transaction) {
             return res.status(404).json({ message: "Transaction not found" });
         }
-    
+
         res.status(200).json({ message: "Transaction deleted successfully" });
     } catch (error) {
         console.error(error);
@@ -522,18 +528,18 @@ module.exports.deleterecenttransaction = async(req, res) => {
 };
 
 
-module.exports.deleteuserTransaction = async(req, res)=>{
+module.exports.deleteuserTransaction = async (req, res) => {
     const { id } = req.params;
 
     try {
         // Find and delete the transaction by ID
         const deletedTransaction = await Transaction.findByIdAndDelete(id);
-        
+
         if (!deletedTransaction) {
             return res.status(404).json({ message: 'Transaction not found' });
         }
         console.log("Transaction deleted successfully");
-        
+
         res.status(200).json({ message: 'Transaction deleted successfully' });
     } catch (error) {
         console.error('Error deleting transaction:', error);
@@ -541,12 +547,12 @@ module.exports.deleteuserTransaction = async(req, res)=>{
     }
 }
 
-module.exports.changetransactions = async(req, res)=>{
+module.exports.changetransactions = async (req, res) => {
     try {
         const { transactionId } = req.params;
         const { status } = req.body; // Get the status from the request body
         console.log(status, transactionId);
-        
+
         // Validate that the status is one of the allowed values
         if (!['successful', 'pending', 'failed'].includes(status)) {
             return res.status(400).json({ message: 'Invalid status value' });
@@ -558,14 +564,14 @@ module.exports.changetransactions = async(req, res)=>{
             { status },
             { new: true } // Return the updated document
         );
-        console.log("fecthing trna scffo",transaction);
-        
+        console.log("fecthing trna scffo", transaction);
+
 
         if (!transaction) {
             return res.status(404).json({ message: 'Transaction not found' });
         }
         console.log("my transactio", transaction);
-        
+
         res.status(200).json(transaction);
     } catch (error) {
         console.error('Error updating transaction status:', error);
@@ -574,16 +580,16 @@ module.exports.changetransactions = async(req, res)=>{
 }
 
 
-module.exports.getlasttwotrnasaction = async(req, res)=>{
+module.exports.getlasttwotrnasaction = async (req, res) => {
     const { userId } = req.params;
     const transactions = await Transaction.find({ userId })
-      .sort({ createdAt: -1 }) // Sort by newest
-      .limit(2); // Fetch only the last two
-    res.json(transactions);   
-} 
+        .sort({ createdAt: -1 }) // Sort by newest
+        .limit(2); // Fetch only the last two
+    res.json(transactions);
+}
 
 
-module.exports.blockUser = async(req, res)=>{
+module.exports.blockUser = async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -605,7 +611,7 @@ module.exports.blockUser = async(req, res)=>{
     }
 }
 
-module.exports.unblockUser = async(req,res)=>{
+module.exports.unblockUser = async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -641,7 +647,7 @@ module.exports.activesessions = async (req, res) => {
 
         for (const session of sessions) {
             if (
-                !deviceSessionsMap.has(session.deviceInfo) || 
+                !deviceSessionsMap.has(session.deviceInfo) ||
                 new Date(session.loggedInAt) > new Date(deviceSessionsMap.get(session.deviceInfo).loggedInAt)
             ) {
                 deviceSessionsMap.set(session.deviceInfo, session);
@@ -679,8 +685,8 @@ module.exports.logoutsession = async (req, res) => {
         await SessionSchema.findByIdAndDelete(sessionId);
 
         // Emit event to the client-side about the session logout
-            io.emit("sessionLoggedOut", { sessionId });
-            console.log("Session logged out successfully", sessionId);
+        io.emit("sessionLoggedOut", { sessionId });
+        console.log("Session logged out successfully", sessionId);
 
         // Send response back to the client
         res.status(200).json({ message: "Session logged out successfully" });
