@@ -629,7 +629,7 @@ module.exports.unblockUser = async (req, res) => {
 module.exports.activesessions = async (req, res) => {
     try {
         const sessions = await SessionSchema.find().populate('userId', 'username');
-        console.log("Active user", sessions);
+        // console.log("Active user", sessions);
 
         if (sessions.length === 0) {
             return res.status(404).json({ message: 'No active sessions found' });
