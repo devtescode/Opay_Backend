@@ -339,16 +339,14 @@ module.exports.transactions = async (req, res) => {
         // Validate required fields
         if (!userId || !bankName || !accountNumber || !accountName || !amount) {
             console.log("All required fields must be provided");
-
             return res.status(400).json({ message: 'All required fields must be provided' });
         }
 
-        const user = await Userschema.findById(userId);  // Replace userId with the correct variable or input
+        const user = await Userschema.findById(userId);
         if (!user) {
             console.error('User not found');
-            return;  // Stop further execution if user not found
+            return res.status(404).json({ message: 'User not found' });
         }
-
 
         const transaction = new Transaction({
             userId,
@@ -359,21 +357,16 @@ module.exports.transactions = async (req, res) => {
             fullname: user.fullname,
         });
 
-        // await transaction.save();
-        transaction.save()
-            .then(savedTransaction => {
-                console.log('Transaction saved:', savedTransaction);
-                res.status(201).json({ message: 'Transaction saved successfully', transactionId: transaction._id });
-                console.log('Transaction saved successfully:', transaction);
-            })
-            .catch(error => {
-                console.error('Error saving transaction:', error);
-            });
+        await transaction.save(); // No need for .then()
+
+        res.status(201).json({ message: 'Transaction saved successfully', transactionId: transaction._id });
+
     } catch (error) {
         console.error('Error saving transaction:', error.message);
-        res.status(500).json({ message: 'Failed to save transaction' });
+        res.status(500).json({ message: 'Failed to save transaction', error: error.message });
     }
 };
+
 
 module.exports.getransactions = async (req, res) => {
     try {
@@ -697,6 +690,39 @@ module.exports.logoutsession = async (req, res) => {
 };
 
 
+// module.exports.addmoney = async (req, res) => {
+//     const { amount } = req.body;
+//     const token = req.headers.authorization?.split(' ')[1];  // Get token from "Bearer <token>"
+
+//     if (!token) {
+//         return res.status(401).json({ message: 'No token provided' });
+//     }
+
+//     try {
+//         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+//         const userId = decoded.userId;      
+
+//         if (!amount || amount <= 0) {
+//             return res.status(400).json({ message: 'Invalid amount' });
+//         }
+
+//         const user = await Userschema.findById(userId);
+
+//         if (!user) {
+//             return res.status(404).json({ message: 'User not found' });
+//         }
+
+//         user.walletBalance = (user.walletBalance || 0) + Number(amount);
+//         await user.save();
+
+//         res.json({ message: 'Money added successfully', newBalance: user.walletBalance });
+
+//     } catch (error) {
+//         console.error('Add Money Error:', error);
+//         res.status(500).json({ message: 'Something went wrong' });
+//     }
+// };
+
 module.exports.addmoney = async (req, res) => {
     const { amount } = req.body;
     const token = req.headers.authorization?.split(' ')[1];  // Get token from "Bearer <token>"
@@ -719,10 +745,12 @@ module.exports.addmoney = async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        user.walletBalance = (user.walletBalance || 0) + Number(amount);
+        // 🚨 Overwrite the balance instead of adding to it
+        user.walletBalance = Number(amount);  // This clears old balance and sets new one directly
+
         await user.save();
 
-        res.json({ message: 'Money added successfully', newBalance: user.walletBalance });
+        res.json({ message: 'Wallet balance updated successfully', newBalance: user.walletBalance });
 
     } catch (error) {
         console.error('Add Money Error:', error);
@@ -759,3 +787,33 @@ module.exports.getuserbalance = async(req,res)=>{
     }
 
 }
+
+module.exports.updatebalance = async (req, res) => {
+    const { amount } = req.body;  // Amount to subtract
+    const token = req.headers.authorization?.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ message: 'No token provided' });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await Userschema.findById(decoded.userId);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (user.walletBalance < amount) {
+            return res.status(400).json({ message: 'Insufficient funds' });
+        }
+
+        user.walletBalance -= amount;
+        await user.save();
+
+        res.json({ message: 'Balance updated successfully', newBalance: user.walletBalance });
+    } catch (error) {
+        console.error('Update Balance Error:', error);
+        res.status(500).json({ message: 'Something went wrong' });
+    }
+};
