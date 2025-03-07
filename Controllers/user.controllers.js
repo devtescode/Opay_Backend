@@ -695,3 +695,67 @@ module.exports.logoutsession = async (req, res) => {
         res.status(500).json({ message: "Error logging out session" });
     }
 };
+
+
+module.exports.addmoney = async (req, res) => {
+    const { amount } = req.body;
+    const token = req.headers.authorization?.split(' ')[1];  // Get token from "Bearer <token>"
+
+    if (!token) {
+        return res.status(401).json({ message: 'No token provided' });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decoded.userId;      
+
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ message: 'Invalid amount' });
+        }
+
+        const user = await Userschema.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        user.walletBalance = (user.walletBalance || 0) + Number(amount);
+        await user.save();
+
+        res.json({ message: 'Money added successfully', newBalance: user.walletBalance });
+
+    } catch (error) {
+        console.error('Add Money Error:', error);
+        res.status(500).json({ message: 'Something went wrong' });
+    }
+};
+
+
+module.exports.getuserbalance = async(req,res)=>{
+    const token = req.headers.authorization?.split(' ')[1];  // Extract token like you did in addmoney
+
+    if (!token) {
+        return res.status(401).json({ message: 'No token provided' });
+    }
+
+    try {
+        // Verify token and get user ID
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decoded.userId;
+
+        // Find user by ID
+        const user = await Userschema.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Return the user's wallet balance
+        res.json({ walletBalance: user.walletBalance || 0 });
+
+    } catch (error) {
+        console.error('Fetch Balance Error:', error);
+        res.status(500).json({ message: 'Failed to fetch user balance' });
+    }
+
+}

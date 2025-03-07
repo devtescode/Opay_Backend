@@ -41,6 +41,10 @@ let schema = mongoose.Schema({
     },
     // unique: true,
   },
+  walletBalance: {
+    type: Number,
+    default: 0, // Start with ₦0 in the wallet
+  },
   blocked: { type: Boolean, default: false },
   deviceInfo: String,
   loggedInAt: { type: Date, default: Date.now },
@@ -117,19 +121,19 @@ const transactionDetailsSchema = new mongoose.Schema(
 const saltRounds = 10;
 schema.pre("save", async function (next) {
   if (this.isModified("password")) {
-      try {
-          const hashedPassword = await bcrypt.hash(this.password, saltRounds);
-          this.password = hashedPassword;
-          next();
-          console.log("my password model", this.password);
-          console.log("my password model", hashedPassword);
-          
-      } catch (err) {
-          console.error("Error hashing password:", err);
-          next(err);
-      }
-  } else {
+    try {
+      const hashedPassword = await bcrypt.hash(this.password, saltRounds);
+      this.password = hashedPassword;
       next();
+      console.log("my password model", this.password);
+      console.log("my password model", hashedPassword);
+
+    } catch (err) {
+      console.error("Error hashing password:", err);
+      next(err);
+    }
+  } else {
+    next();
   }
 });
 
@@ -146,7 +150,7 @@ schema.methods.compareUser = async function (userPass) {
 
 const Userschema = mongoose.model("useropay", schema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
-const RecentTransaction =  mongoose.model("recentdetail", transactionDetailsSchema);
+const RecentTransaction = mongoose.model("recentdetail", transactionDetailsSchema);
 
 // module.exports = mongoose.model('Transaction', transactionSchema);
 module.exports = { Userschema, Transaction, RecentTransaction };
