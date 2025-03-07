@@ -383,8 +383,9 @@ module.exports.getransactions = async (req, res) => {
 
 module.exports.getallusers = async (req, res) => {
     try {
-        const users = await Userschema.find({}, "fullname username phoneNumber blocked");
+        const users = await Userschema.find({}, "fullname username phoneNumber blocked walletBalance");
         res.status(200).json(users);
+
     } catch (error) {
         console.error("Error fetching users:", error);
         res.status(500).json({ message: "Failed to fetch users", error });
@@ -817,3 +818,18 @@ module.exports.updatebalance = async (req, res) => {
         res.status(500).json({ message: 'Something went wrong' });
     }
 };
+
+
+module.exports.getTotalBalance = async (req, res) => {
+    try {
+        const users = await Userschema.find({}, "walletBalance");
+
+        const totalBalance = users.reduce((sum, user) => sum + (user.walletBalance || 0), 0);
+
+        res.status(200).json({ totalBalance });
+    } catch (error) {
+        console.error("Error calculating total balance:", error);
+        res.status(500).json({ message: "Failed to calculate total balance", error });
+    }
+};
+
