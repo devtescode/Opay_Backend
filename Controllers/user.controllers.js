@@ -384,6 +384,7 @@ module.exports.getransactions = async (req, res) => {
 module.exports.getallusers = async (req, res) => {
     try {
         const users = await Userschema.find({}, "fullname username phoneNumber blocked walletBalance");
+        res.setHeader("Content-Type", "application/json");
         res.status(200).json(users);
 
     } catch (error) {
