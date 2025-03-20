@@ -908,3 +908,22 @@ module.exports.getMoneyOut = async (req, res) => {
     }
 }
 
+module.exports.getrecentransactionsearch = async (req, res) => {
+    const { userId } = req.params; // Get userId from request params
+
+    try {
+        // Fetch all transactions for the user, sorted by most recent
+        const transactions = await RecentTransaction.find({ userId })
+
+        console.log("All recent transactions:", transactions);
+
+        if (!transactions || transactions.length === 0) {
+            return res.status(404).json({ message: "No transactions found." });
+        }
+
+        return res.status(200).json(transactions);
+    } catch (error) {
+        console.error("Error fetching transactions:", error);
+        return res.status(500).json({ message: "Failed to fetch transactions." });
+    }
+};
