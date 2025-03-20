@@ -135,7 +135,7 @@ const getClientIP = (req) => {
     return req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress;
 };
 
-module.exports.userlogin = async (req, res) => { 
+module.exports.userlogin = async (req, res) => {
     const { password, deviceInfo, sessionId } = req.body;
     const clientIP = getClientIP(req); // Get user IP
     console.log("Device Info:", deviceInfo, "IP:", clientIP);
@@ -175,7 +175,7 @@ module.exports.userlogin = async (req, res) => {
         });
 
         if (existingSession && (!sessionId || sessionId !== existingSession._id.toString())) {
-            return res.status(403).json({ 
+            return res.status(403).json({
                 message: "Your account is already logged in on another device. Please log out first."
             });
         }
@@ -735,7 +735,7 @@ module.exports.addmoney = async (req, res) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.userId;      
+        const userId = decoded.userId;
 
         if (!amount || amount <= 0) {
             return res.status(400).json({ message: 'Invalid amount' });
@@ -761,7 +761,7 @@ module.exports.addmoney = async (req, res) => {
 };
 
 
-module.exports.getuserbalance = async(req,res)=>{
+module.exports.getuserbalance = async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];  // Extract token like you did in addmoney
 
     if (!token) {
@@ -835,9 +835,9 @@ module.exports.getTotalBalance = async (req, res) => {
 };
 
 
-module.exports.updatemoneyout = async (req, res)=>{
+module.exports.updatemoneyout = async (req, res) => {
     // console.log("hit updatemoneyout");
-    
+
     // try {
     //     const { userId, amount } = req.body;
     //     // Find User and Update `moneyOut`
@@ -880,14 +880,15 @@ module.exports.updatemoneyout = async (req, res)=>{
             const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
 
             if (today.getDate() === lastDay) {
-                user.moneyOut = 0; // Reset moneyOut at month-end
-                console.log(`moneyOut reset for user ${userId} at month-end.`);
+                // Delete the `moneyOut` field from the database
+                await Userschema.updateOne({ _id: userId }, { $unset: { moneyOut: 1 } });
+                console.log(`moneyOut field deleted for user ${userId} at month-end.`);
+                return res.json({ success: true, moneyOut: 0 }); // Send 0 to frontend
             } else {
                 user.moneyOut = (user.moneyOut || 0) + amount; // Add to existing moneyOut
+                await user.save();
+                return res.json({ success: true, moneyOut: user.moneyOut });
             }
-
-            await user.save();
-            res.json({ success: true, moneyOut: user.moneyOut });
         });
     } catch (error) {
         console.error('Error updating moneyOut:', error);
@@ -895,7 +896,7 @@ module.exports.updatemoneyout = async (req, res)=>{
     }
 }
 
-module.exports.getMoneyOut = async(req,res)=>{
+module.exports.getMoneyOut = async (req, res) => {
     try {
         const user = await Userschema.findById(req.params.userId);
         if (!user) return res.status(404).json({ message: 'User not found' });
