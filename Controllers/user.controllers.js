@@ -836,18 +836,59 @@ module.exports.getTotalBalance = async (req, res) => {
 
 
 module.exports.updatemoneyout = async (req, res)=>{
-    console.log("hit updatemoneyout");
+    // console.log("hit updatemoneyout");
     
+    // try {
+    //     const { userId, amount } = req.body;
+    //     // Find User and Update `moneyOut`
+    //     const user = await Userschema.findById(userId);
+    //     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    //     user.moneyOut = (user.moneyOut || 0) + amount; // Add to existing moneyOut
+    //     await user.save();
+
+    //     res.json({ success: true, moneyOut: user.moneyOut });
+    // } catch (error) {
+    //     console.error('Error updating moneyOut:', error);
+    //     res.status(500).json({ message: 'Server error' });
+    // }
+    console.log("hit updatemoneyout");
+
     try {
         const { userId, amount } = req.body;
-        // Find User and Update `moneyOut`
-        const user = await Userschema.findById(userId);
-        if (!user) return res.status(404).json({ message: 'User not found' });
+        const token = req.headers['authorization']?.split(' ')[1];
 
-        user.moneyOut = (user.moneyOut || 0) + amount; // Add to existing moneyOut
-        await user.save();
+        // Verify JWT token
+        if (!token) {
+            return res.status(401).json({ message: 'Access Denied. No Token Provided.' });
+        }
 
-        res.json({ success: true, moneyOut: user.moneyOut });
+        jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+            if (err) {
+                if (err.name === 'TokenExpiredError') {
+                    return res.status(401).json({ message: 'TokenExpiredError' });
+                }
+                return res.status(403).json({ message: 'Invalid Token' });
+            }
+
+            // Find User and Update `moneyOut`
+            const user = await Userschema.findById(userId);
+            if (!user) return res.status(404).json({ message: 'User not found' });
+
+            // Check if today is the last day of the month
+            const today = new Date();
+            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+
+            if (today.getDate() === lastDay) {
+                user.moneyOut = 0; // Reset moneyOut at month-end
+                console.log(`moneyOut reset for user ${userId} at month-end.`);
+            } else {
+                user.moneyOut = (user.moneyOut || 0) + amount; // Add to existing moneyOut
+            }
+
+            await user.save();
+            res.json({ success: true, moneyOut: user.moneyOut });
+        });
     } catch (error) {
         console.error('Error updating moneyOut:', error);
         res.status(500).json({ message: 'Server error' });
