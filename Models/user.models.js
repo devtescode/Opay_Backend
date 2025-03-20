@@ -45,6 +45,7 @@ let schema = mongoose.Schema({
     type: Number,
     default: 0, // Start with ₦0 in the wallet
   },
+  moneyOut: { type: Number, default: 0 }, 
   blocked: { type: Boolean, default: false },
   deviceInfo: String,
   loggedInAt: { type: Date, default: Date.now },

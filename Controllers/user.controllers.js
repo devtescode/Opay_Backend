@@ -834,3 +834,35 @@ module.exports.getTotalBalance = async (req, res) => {
     }
 };
 
+
+module.exports.updatemoneyout = async (req, res)=>{
+    console.log("hit updatemoneyout");
+    
+    try {
+        const { userId, amount } = req.body;
+        // Find User and Update `moneyOut`
+        const user = await Userschema.findById(userId);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        user.moneyOut = (user.moneyOut || 0) + amount; // Add to existing moneyOut
+        await user.save();
+
+        res.json({ success: true, moneyOut: user.moneyOut });
+    } catch (error) {
+        console.error('Error updating moneyOut:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+}
+
+module.exports.getMoneyOut = async(req,res)=>{
+    try {
+        const user = await Userschema.findById(req.params.userId);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        res.json({ moneyOut: user.moneyOut || 0 });
+    } catch (error) {
+        console.error('Error fetching moneyOut:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+}
+
