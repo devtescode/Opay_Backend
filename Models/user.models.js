@@ -49,6 +49,9 @@ let schema = mongoose.Schema({
   blocked: { type: Boolean, default: false },
   deviceInfo: String,
   loggedInAt: { type: Date, default: Date.now },
+  profilePicture: {
+    type: String,
+  },
 }, { timestamps: true });
 
 

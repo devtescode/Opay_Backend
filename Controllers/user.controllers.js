@@ -5,7 +5,8 @@ const env = require("dotenv")
 const mongoose = require("mongoose")
 const bcrypt = require("bcryptjs")
 const { default: axios } = require("axios")
-// const ADMIN_SECRET_KEY= process.env.JWT_SECRET_KEY 
+const ADMIN_SECRET_KEY= process.env.JWT_SECRET_KEY 
+const cloudinary = require('cloudinary').v2;
 env.config()
 
 
@@ -919,7 +920,7 @@ module.exports.getrecentransactionsearch = async (req, res) => {
 
         if (!transactions || transactions.length === 0) {
             return res.status(404).json({ message: "No transactions found." });
-        }
+        }       
 
         return res.status(200).json(transactions);
     } catch (error) {
@@ -927,3 +928,37 @@ module.exports.getrecentransactionsearch = async (req, res) => {
         return res.status(500).json({ message: "Failed to fetch transactions." });
     }
 };
+
+
+module.exports.upload = async (req, res) => {
+    try {
+      const { userId } = req.body;
+      console.log("Received userId:", userId);
+  
+      // Ensure userId is converted to ObjectId
+      const user = await Userschema.findById(new mongoose.Types.ObjectId(userId));
+      
+      console.log(user, "userdetails");
+  
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+  
+      if (!req.file) {
+        console.log("No file uploaded");
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+  
+      console.log(req.file.path);
+  
+      // Update user with uploaded picture URL (example)
+      user.profilePicture = req.file.path; // Assuming you add a field for profile picture
+      await user.save();
+      res.json({ message: 'Upload successful', url: req.file.path });
+      console.log("Upload successful");
+    } catch (err) {
+      console.error("Error:", err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  };
+  
