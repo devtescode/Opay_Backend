@@ -210,7 +210,7 @@ module.exports.userlogin = async (req, res) => {
                 role: matchedUser.role,
                 fullname: matchedUser.fullname,
                 profilePicture: matchedUser.profilePicture,
-                sessionId: session._id, // ✅ Ensure one session per user
+                sessionId: session._id,
             },
         });
     } catch (error) {
