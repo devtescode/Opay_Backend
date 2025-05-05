@@ -962,4 +962,30 @@ module.exports.upload = async (req, res) => {
       res.status(500).json({ error: 'Server error' });
     }
   };
+
+
+  module.exports.changepassword = async(req, res)=>{
+    const { userId, oldPassword, newPassword } = req.body;
+
+    try {
+      const user = await Userschema.findById(userId);
+      console.log(user, "user change password");
+      
+      if (!user) return res.status(404).json({ message: 'User not found' });
   
+      const isMatch = await bcrypt.compare(oldPassword, user.password);
+      if (!isMatch) return res.status(400).json({ message: 'Old password is incorrect' });
+      console.log(user.password, "user password");
+      
+      const hashed = await bcrypt.hash(newPassword, 10);
+      user.password = hashed;
+      await user.save();
+      console.log(hashed, "hashed password");
+      
+  
+      res.status(200).json({ message: 'Password updated successfully' });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  }

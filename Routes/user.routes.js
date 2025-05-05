@@ -1,5 +1,5 @@
 const express = require("express")
-const { userWelcome, adminlogin, createUser, userlogin, useraccount, transactions, getransactions, getallusers, gettransactions, getCounts, saveRecentTransaction, getrecentransaction, deleterecenttransaction, deleteuserTransaction, changetransactions, getlasttwotrnasaction, blockUser, unblockUser, activesessions, logoutsession, addmoney, getuserbalance, updatebalance, getTotalBalance, getMoneyOut, updatemoneyout, getrecentransactionsearch, upload } = require("../Controllers/user.controllers")
+const { userWelcome, adminlogin, createUser, userlogin, useraccount, transactions, getransactions, getallusers, gettransactions, getCounts, saveRecentTransaction, getrecentransaction, deleterecenttransaction, deleteuserTransaction, changetransactions, getlasttwotrnasaction, blockUser, unblockUser, activesessions, logoutsession, addmoney, getuserbalance, updatebalance, getTotalBalance, getMoneyOut, updatemoneyout, getrecentransactionsearch, upload, changepassword } = require("../Controllers/user.controllers")
 const router = express.Router()
 
 const multer = require('multer');
@@ -59,5 +59,7 @@ router.post("/updatemoneyout", updatemoneyout)
 router.get("/getMoneyOut/:userId", getMoneyOut)
 router.get("/getrecentransactionsearch/:userId", getrecentransactionsearch)
 router.post('/uploadpicture', uploadpic.single('image'), upload)
+router.post("/changepassword", changepassword)
+
 
 module.exports = router
