@@ -5,7 +5,7 @@ const env = require("dotenv")
 const mongoose = require("mongoose")
 const bcrypt = require("bcryptjs")
 const { default: axios } = require("axios")
-const ADMIN_SECRET_KEY= process.env.JWT_SECRET_KEY 
+const ADMIN_SECRET_KEY = process.env.JWT_SECRET_KEY 
 const cloudinary = require('cloudinary').v2;
 env.config()
 
@@ -1035,3 +1035,57 @@ module.exports.changepassword = async (req, res) => {
       }
     });
   };
+
+  module.exports.changeadminpassword = (req, res) => {
+    const { adminToken, OldPassword, NewPassword } = req.body;
+    
+    // Verify the admin token
+    jwt.verify(adminToken, process.env.ADMIN_SECRET_KEY, async (err, decoded) => {
+      if (err) {
+        console.log("Token verification error:", err);
+        return res.status(401).json({ status: false, message: "Invalid or expired token" });
+      }
+  
+      try {
+        // Find the user by the email in the decoded token and check if the role is 'admin'
+        const user = await Userschema.findOne({ email: decoded.email });
+        console.log(user, "admin onlyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy");
+        
+        if (!user || user.role !== 'admin') {
+          return res.status(404).json({ status: false, message: "Admin user not found" });
+        }
+  
+        // Compare the old password
+        const isPasswordCorrect = await user.compareUser(OldPassword);
+        if (!isPasswordCorrect) {
+          return res.status(400).json({ status: false, message: "Incorrect password" });
+        }
+  
+        // Check if the new password is the same as the old one
+        if (OldPassword === NewPassword) {
+          return res.status(400).json({ status: false, message: "New password cannot be the same as the old password" });
+        }
+  
+        // Check if the new password has already been used by any user
+        const users = await Userschema.find({});
+        for (let existingUser of users) {
+          const reused = await bcrypt.compare(NewPassword, existingUser.password);
+          if (reused) {
+            return res.status(400).json({ status: false, message: "Password is already in use, please choose a different password" });
+          }
+        }
+  
+        // Set the new password (no need to manually hash, because it's handled by your schema)
+        user.password = NewPassword;
+        await user.save();
+        console.log("Password changed successfully" , user.password)
+  
+        return res.status(200).json({ status: true, message: "Password changed successfully" });
+  
+      } catch (err) {
+        console.error("Error while changing password:", err);
+        return res.status(500).json({ status: false, message: "Server error" });
+      }
+    });
+  };
+  
