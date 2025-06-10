@@ -1083,9 +1083,32 @@ module.exports.changepassword = async (req, res) => {
         return res.status(200).json({ status: true, message: "Password changed successfully" });
   
       } catch (err) {
-        console.error("Error while changing password:", err);
+        console.ercoror("Error while changing password:", err);
         return res.status(500).json({ status: false, message: "Server error" });
       }
     });
   };
+
+
+  module.exports.reverseTransaction = async (req, res) => {
+    try {
+      const { id } = req.params;
+  
+      const transaction = await Transaction.findById(id);
+      if (!transaction) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+  
+      if (transaction.status === "pending") {
+        transaction.status = "Reversed";
+        await transaction.save();
+      }
+  
+      res.status(200).json({ message: "Transaction Reversed", transaction });
+    } catch (error) {
+      console.error("Error reversing transaction:", error);
+      res.status(500).json({ message: "Failed to reverse transaction" });
+    }
+  };
+  
   
