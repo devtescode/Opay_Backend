@@ -5,7 +5,7 @@ const env = require("dotenv")
 const mongoose = require("mongoose")
 const bcrypt = require("bcryptjs")
 const { default: axios } = require("axios")
-const ADMIN_SECRET_KEY = process.env.JWT_SECRET_KEY 
+const ADMIN_SECRET_KEY = process.env.JWT_SECRET_KEY
 const cloudinary = require('cloudinary').v2;
 env.config()
 
@@ -335,18 +335,19 @@ module.exports.useraccount = async (req, res) => {
 
 
 module.exports.transactions = async (req, res) => {
+    console.log(req.body);
+
     try {
         const { userId, bankName, accountNumber, accountName, amount } = req.body;
 
-        // Validate required fields
         if (!userId || !bankName || !accountNumber || !accountName || !amount) {
-            console.log("All required fields must be provided");
             return res.status(400).json({ message: 'All required fields must be provided' });
         }
 
         const user = await Userschema.findById(userId);
+        console.log(user, "The userid");
+
         if (!user) {
-            console.error('User not found');
             return res.status(404).json({ message: 'User not found' });
         }
 
@@ -359,15 +360,26 @@ module.exports.transactions = async (req, res) => {
             fullname: user.fullname,
         });
 
-        await transaction.save(); // No need for .then()
+        await transaction.save();
 
-        res.status(201).json({ message: 'Transaction saved successfully', transactionId: transaction._id });
+        // Send full transaction details
+        // res.status(201).json({ 
+        //     message: 'Transaction saved successfully', 
+        //     transaction 
+        // });
+        res.status(201).json({
+            message: 'Transaction saved successfully',
+            transactionId: transaction._id,
+            transaction,
+        });
+
 
     } catch (error) {
         console.error('Error saving transaction:', error.message);
         res.status(500).json({ message: 'Failed to save transaction', error: error.message });
     }
 };
+
 
 
 module.exports.getransactions = async (req, res) => {
@@ -921,7 +933,7 @@ module.exports.getrecentransactionsearch = async (req, res) => {
 
         if (!transactions || transactions.length === 0) {
             return res.status(404).json({ message: "No transactions found." });
-        }       
+        }
 
         return res.status(200).json(transactions);
     } catch (error) {
@@ -933,35 +945,35 @@ module.exports.getrecentransactionsearch = async (req, res) => {
 
 module.exports.upload = async (req, res) => {
     try {
-      const { userId } = req.body;
-      console.log("Received userId:", userId);
-  
-      // Ensure userId is converted to ObjectId
-      const user = await Userschema.findById(new mongoose.Types.ObjectId(userId));
-      
-      console.log(user, "userdetails");
-  
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-  
-      if (!req.file) {
-        console.log("No file uploaded");
-        return res.status(400).json({ error: 'No file uploaded' });
-      }
-  
-      console.log(req.file.path);
-  
-      // Update user with uploaded picture URL (example)
-      user.profilePicture = req.file.path; // Assuming you add a field for profile picture
-      await user.save();
-      res.json({ message: 'Upload successful', url: req.file.path });
-      console.log("Upload successful");
+        const { userId } = req.body;
+        console.log("Received userId:", userId);
+
+        // Ensure userId is converted to ObjectId
+        const user = await Userschema.findById(new mongoose.Types.ObjectId(userId));
+
+        console.log(user, "userdetails");
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (!req.file) {
+            console.log("No file uploaded");
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        console.log(req.file.path);
+
+        // Update user with uploaded picture URL (example)
+        user.profilePicture = req.file.path; // Assuming you add a field for profile picture
+        await user.save();
+        res.json({ message: 'Upload successful', url: req.file.path });
+        console.log("Upload successful");
     } catch (err) {
-      console.error("Error:", err);
-      res.status(500).json({ error: 'Server error' });
+        console.error("Error:", err);
+        res.status(500).json({ error: 'Server error' });
     }
-  };
+};
 
 
 //   module.exports.changepassword = async(req, res)=>{
@@ -970,19 +982,19 @@ module.exports.upload = async (req, res) => {
 //     try {
 //       const user = await Userschema.findById(userId);
 //       console.log(user, "user change password");
-      
+
 //       if (!user) return res.status(404).json({ message: 'User not found' });
-  
+
 //       const isMatch = await bcrypt.compare(oldPassword, user.password);
 //       if (!isMatch) return res.status(400).json({ message: 'Old password is incorrect' });
 //       console.log(user.password, "user password");
-      
+
 //       const hashed = await bcrypt.hash(newPassword, 10);
 //       user.password = hashed;
 //       await user.save();
 //       console.log(hashed, "hashed password");
-      
-  
+
+
 //       res.status(200).json({ message: 'Password updated successfully' });
 //     } catch (err) {
 //       console.error(err);
@@ -992,123 +1004,122 @@ module.exports.upload = async (req, res) => {
 
 module.exports.changepassword = async (req, res) => {
     const { token, OldPassword, NewPassword } = req.body;
-  
-    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      console.log("Decoded JWT:", decoded);
-      if (err) {
-        console.log("Token verification error:", err);
-        return res.status(401).json({ status: false, message: "Invalid or expired token" });
-      }
-  
-      try {
-        const user = await Userschema.findById(decoded.userId);
-        if (!user) {
-          return res.status(404).json({ status: false, message: "User not found" });
-        }
-  
-        const isPasswordCorrect = await user.compareUser(OldPassword);
-        if (!isPasswordCorrect) {
-          return res.status(400).json({ status: false, message: "Incorrect password" });
-        }
-  
-        if (OldPassword === NewPassword) {
-          return res.status(400).json({ status: false, message: "New password cannot be the same as the old password" });
-        }
-  
-        // Check if the new password has already been used by any user
-        const users = await Userschema.find({});
-        for (let existingUser of users) {
-          const reused = await bcrypt.compare(NewPassword, existingUser.password);
-          if (reused) {
-            return res.status(400).json({ status: false, message: "Error occured when creating password  try different password" });
-          }
-        }
-  
-        user.password = NewPassword;
-        await user.save();
-  
-        return res.status(200).json({ status: true, message: "Password changed successfully" });
-  
-      } catch (err) {
-        console.error("Error while changing password:", err);
-        return res.status(500).json({ status: false, message: "Server error" });
-      }
-    });
-  };
 
-  module.exports.changeadminpassword = (req, res) => {
+    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+        console.log("Decoded JWT:", decoded);
+        if (err) {
+            console.log("Token verification error:", err);
+            return res.status(401).json({ status: false, message: "Invalid or expired token" });
+        }
+
+        try {
+            const user = await Userschema.findById(decoded.userId);
+            if (!user) {
+                return res.status(404).json({ status: false, message: "User not found" });
+            }
+
+            const isPasswordCorrect = await user.compareUser(OldPassword);
+            if (!isPasswordCorrect) {
+                return res.status(400).json({ status: false, message: "Incorrect password" });
+            }
+
+            if (OldPassword === NewPassword) {
+                return res.status(400).json({ status: false, message: "New password cannot be the same as the old password" });
+            }
+
+            // Check if the new password has already been used by any user
+            const users = await Userschema.find({});
+            for (let existingUser of users) {
+                const reused = await bcrypt.compare(NewPassword, existingUser.password);
+                if (reused) {
+                    return res.status(400).json({ status: false, message: "Error occured when creating password  try different password" });
+                }
+            }
+
+            user.password = NewPassword;
+            await user.save();
+
+            return res.status(200).json({ status: true, message: "Password changed successfully" });
+
+        } catch (err) {
+            console.error("Error while changing password:", err);
+            return res.status(500).json({ status: false, message: "Server error" });
+        }
+    });
+};
+
+module.exports.changeadminpassword = (req, res) => {
     const { adminToken, OldPassword, NewPassword } = req.body;
-    
+
     // Verify the admin token
     jwt.verify(adminToken, process.env.ADMIN_SECRET_KEY, async (err, decoded) => {
-      if (err) {
-        console.log("Token verification error:", err);
-        return res.status(401).json({ status: false, message: "Invalid or expired token" });
-      }
-  
-      try {
-        // Find the user by the email in the decoded token and check if the role is 'admin'
-        const user = await Userschema.findOne({ email: decoded.email });
-        console.log(user, "admin onlyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy");
-        
-        if (!user || user.role !== 'admin') {
-          return res.status(404).json({ status: false, message: "Admin user not found" });
+        if (err) {
+            console.log("Token verification error:", err);
+            return res.status(401).json({ status: false, message: "Invalid or expired token" });
         }
-  
-        // Compare the old password
-        const isPasswordCorrect = await user.compareUser(OldPassword);
-        if (!isPasswordCorrect) {
-          return res.status(400).json({ status: false, message: "Incorrect password" });
+
+        try {
+            // Find the user by the email in the decoded token and check if the role is 'admin'
+            const user = await Userschema.findOne({ email: decoded.email });
+            console.log(user, "admin onlyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy");
+
+            if (!user || user.role !== 'admin') {
+                return res.status(404).json({ status: false, message: "Admin user not found" });
+            }
+
+            // Compare the old password
+            const isPasswordCorrect = await user.compareUser(OldPassword);
+            if (!isPasswordCorrect) {
+                return res.status(400).json({ status: false, message: "Incorrect password" });
+            }
+
+            // Check if the new password is the same as the old one
+            if (OldPassword === NewPassword) {
+                return res.status(400).json({ status: false, message: "New password cannot be the same as the old password" });
+            }
+
+            // Check if the new password has already been used by any user
+            const users = await Userschema.find({});
+            for (let existingUser of users) {
+                const reused = await bcrypt.compare(NewPassword, existingUser.password);
+                if (reused) {
+                    return res.status(400).json({ status: false, message: "Password is already in use, please choose a different password" });
+                }
+            }
+
+            // Set the new password (no need to manually hash, because it's handled by your schema)
+            user.password = NewPassword;
+            await user.save();
+            console.log("Password changed successfully", user.password)
+
+            return res.status(200).json({ status: true, message: "Password changed successfully" });
+
+        } catch (err) {
+            console.ercoror("Error while changing password:", err);
+            return res.status(500).json({ status: false, message: "Server error" });
         }
-  
-        // Check if the new password is the same as the old one
-        if (OldPassword === NewPassword) {
-          return res.status(400).json({ status: false, message: "New password cannot be the same as the old password" });
-        }
-  
-        // Check if the new password has already been used by any user
-        const users = await Userschema.find({});
-        for (let existingUser of users) {
-          const reused = await bcrypt.compare(NewPassword, existingUser.password);
-          if (reused) {
-            return res.status(400).json({ status: false, message: "Password is already in use, please choose a different password" });
-          }
-        }
-  
-        // Set the new password (no need to manually hash, because it's handled by your schema)
-        user.password = NewPassword;
-        await user.save();
-        console.log("Password changed successfully" , user.password)
-  
-        return res.status(200).json({ status: true, message: "Password changed successfully" });
-  
-      } catch (err) {
-        console.ercoror("Error while changing password:", err);
-        return res.status(500).json({ status: false, message: "Server error" });
-      }
     });
-  };
+};
 
 
-  module.exports.reverseTransaction = async (req, res) => {
+module.exports.reverseTransaction = async (req, res) => {
     try {
-      const { id } = req.params;
-  
-      const transaction = await Transaction.findById(id);
-      if (!transaction) {
-        return res.status(404).json({ message: "Transaction not found" });
-      }
-  
-      if (transaction.status === "pending") {
-        transaction.status = "Reversed";
-        await transaction.save();
-      }
-  
-      res.status(200).json({ message: "Transaction Reversed", transaction });
+        const { id } = req.params;
+
+        const transaction = await Transaction.findById(id);
+        if (!transaction) {
+            return res.status(404).json({ message: "Transaction not found" });
+        }
+
+        if (transaction.status === "pending") {
+            transaction.status = "Reversed";
+            await transaction.save();
+        }
+
+        res.status(200).json({ message: "Transaction Reversed", transaction });
     } catch (error) {
-      console.error("Error reversing transaction:", error);
-      res.status(500).json({ message: "Failed to reverse transaction" });
+        console.error("Error reversing transaction:", error);
+        res.status(500).json({ message: "Failed to reverse transaction" });
     }
-  };
-  
-  
+};
+
