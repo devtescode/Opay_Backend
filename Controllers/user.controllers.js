@@ -776,7 +776,7 @@ module.exports.addmoney = async (req, res) => {
 
 
 module.exports.getuserbalance = async (req, res) => {
-    const token = req.headers.authorization?.split(' ')[1];  // Extract token like you did in addmoney
+    const token = req.headers.authorization?.split(' ')[1];
 
     if (!token) {
         return res.status(401).json({ message: 'No token provided' });
@@ -794,15 +794,23 @@ module.exports.getuserbalance = async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        // Return the user's wallet balance
         res.json({ walletBalance: user.walletBalance || 0 });
 
     } catch (error) {
-        console.error('Fetch Balance Error:', error);
+        console.error('Fetch Balance Error:', error.message);
+
+        // Detect token-related errors
+        if (
+            error.name === 'TokenExpiredError' ||
+            error.name === 'JsonWebTokenError'
+        ) {
+            return res.status(401).json({ message: 'Invalid or expired token' });
+        }
+
         res.status(500).json({ message: 'Failed to fetch user balance' });
     }
+};
 
-}
 
 module.exports.updatebalance = async (req, res) => {
     const { amount } = req.body;  // Amount to subtract
