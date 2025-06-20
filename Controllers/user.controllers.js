@@ -397,7 +397,7 @@ module.exports.getransactions = async (req, res) => {
 
 module.exports.getallusers = async (req, res) => {
     try {
-        const users = await Userschema.find({}, "fullname username phoneNumber blocked walletBalance");
+        const users = await Userschema.find({}, "fullname username phoneNumber blocked walletBalance isUnlimited");
         res.setHeader("Content-Type", "application/json");
         res.status(200).json(users);
 
@@ -1130,4 +1130,79 @@ module.exports.reverseTransaction = async (req, res) => {
         res.status(500).json({ message: "Failed to reverse transaction" });
     }
 };
+
+
+module.exports.checkTransactionLimit = async (req, res) => {
+
+    const { token } = req.body;
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decoded.userId;
+
+        const user = await Userschema.findById(userId);
+        if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+        // ✅ If unlimited, skip the check
+        if (user.isUnlimited) {
+            console.log("Unlimited user. Proceed.");
+            return res.status(200).json({ status: true, message: "Unlimited user. Proceed." });
+        }
+
+
+        // Get today's start and end
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+
+        const endOfDay = new Date();
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const todayTransactions = await Transaction.find({
+            userId,
+            createdAt: { $gte: startOfDay, $lte: endOfDay }
+        });
+
+        if (todayTransactions.length >= 2) {
+            return res.status(403).json({ status: false, message: "Daily transaction limit reached" });
+        }
+
+        return res.status(200).json({ status: true, message: "You can proceed" });
+
+    } catch (err) {
+        console.error(err);
+        return res.status(401).json({ status: false, message: "Invalid token" });
+    }
+
+}
+
+
+module.exports.setUnlimited = async (req, res) => {
+    const { userId, unlimited } = req.body;
+
+    try {
+        // If unlimited is true, set isUnlimited: true and isLimited: false
+        // If unlimited is false, set isUnlimited: false and isLimited: true
+        await Userschema.findByIdAndUpdate(userId, {
+            isUnlimited: unlimited,
+            isLimited: !unlimited,
+        });
+
+        const statusText = unlimited ? "unlimited" : "limited";
+
+        console.log(`User (${userId}) access set to: ${statusText}`);
+
+        res.status(200).json({
+            status: true,
+            message: `User set to ${statusText}`,
+        });
+
+    } catch (err) {
+        console.error("Error setting user access:", err);
+        res.status(500).json({
+            status: false,
+            message: "Could not update user",
+        });
+    }
+};
+
 

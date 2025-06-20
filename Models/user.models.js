@@ -45,13 +45,14 @@ let schema = mongoose.Schema({
     type: Number,
     default: 0, // Start with ₦0 in the wallet
   },
-  moneyOut: { type: Number, default: 0 }, 
+  moneyOut: { type: Number, default: 0 },
   blocked: { type: Boolean, default: false },
   deviceInfo: String,
   loggedInAt: { type: Date, default: Date.now },
   profilePicture: {
     type: String,
   },
+  isUnlimited: { type: Boolean, default: false }, // ✅ this must exist
 }, { timestamps: true });
 
 
@@ -88,6 +89,14 @@ const transactionSchema = new mongoose.Schema(
       enum: ['successful', 'pending', 'failed', 'Reversed'], // Optional: Track transaction status
       default: 'successful',
     },
+    isUnlimited: {
+      type: Boolean,
+      default: false,
+    },
+    isLimited: {
+      type: Boolean,
+      default: true,
+    }
 
   },
   { timestamps: true }
