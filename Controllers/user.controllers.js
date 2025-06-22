@@ -1205,4 +1205,59 @@ module.exports.setUnlimited = async (req, res) => {
     }
 };
 
+module.exports.fundaccount = async (req, res) => {
+    const { username, amount } = req.body;
+    console.log(req.body, "get the details");
 
+    try {
+        const user = await Userschema.findOne({ username: username });
+
+        if (!user) {
+            return res.status(404).send('User not found');
+        }
+
+        // Generate a dummy email for Paystack (required)
+        const dummyEmail = `${user.username}@opay.com`; // Use your actual domain if possible
+        console.log(dummyEmail, "my dummyEmail");
+        
+        // Create a transaction request with Paystack
+        const response = await axios.post(
+            'https://api.paystack.co/transaction/initialize',
+            {
+                email: dummyEmail, // required field
+                amount: amount * 100, // Paystack requires the amount in kobo
+                metadata: {
+                    username: user.username,
+                    fullname: user.fullname,
+                    phone: user.phoneNumber
+                }
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${process.env.API_SECRET}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        if (response.data.status) {
+            // Transaction link generated
+            res.send({
+                status: true,
+                message: 'Account funding success',
+                authorization_url: response.data.data.authorization_url
+            });
+
+            console.log("Link response successfully sent");
+        } else {
+            res.status(400).send('Funding failed');
+            console.log("Funding failed");
+        }
+    } catch (error) {
+        console.error(
+            'Error funding account',
+            error.response ? error.response.data : error.message
+        );
+        res.status(500).send('Internal server error');
+    }
+};
