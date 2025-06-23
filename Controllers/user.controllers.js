@@ -1168,7 +1168,7 @@ module.exports.checkTransactionLimit = async (req, res) => {
 
         const todayFunding = await PaymentDB.findOne({
             customerEmail: dummyEmail,
-            amount: { $gte: 100 }, // Accept 100 or more
+            amount: { $gte: 300 }, // Accept 100 or more
             status: 'success',
             paidAt: { $gte: startOfToday, $lte: endOfToday }
         });
