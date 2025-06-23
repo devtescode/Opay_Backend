@@ -1133,7 +1133,6 @@ module.exports.reverseTransaction = async (req, res) => {
 
 
 module.exports.checkTransactionLimit = async (req, res) => {
-
     const { token } = req.body;
 
     try {
@@ -1143,37 +1142,52 @@ module.exports.checkTransactionLimit = async (req, res) => {
         const user = await Userschema.findById(userId);
         if (!user) return res.status(404).json({ status: false, message: "User not found" });
 
-        // ✅ If unlimited, skip the check
+        // ✅ Always allow unlimited users
         if (user.isUnlimited) {
-            console.log("Unlimited user. Proceed.");
-            return res.status(200).json({ status: true, message: "Unlimited user. Proceed." });
+            return res.status(200).json({ status: true, message: "Unlimited user. Access granted." });
         }
 
+        const now = new Date();
+        const startOfToday = new Date(now.setHours(0, 0, 0, 0));
+        const endOfToday = new Date(now.setHours(23, 59, 59, 999));
 
-        // Get today's start and end
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-
-        const endOfDay = new Date();
-        endOfDay.setHours(23, 59, 59, 999);
-
+        // ✅ Check today's transactions
         const todayTransactions = await Transaction.find({
             userId,
-            createdAt: { $gte: startOfDay, $lte: endOfDay }
+            createdAt: { $gte: startOfToday, $lte: endOfToday }
         });
 
-        if (todayTransactions.length >= 2) {
-            return res.status(403).json({ status: false, message: "Daily transaction limit reached" });
+        if (todayTransactions.length < 2) {
+            // ✅ Allow free transactions (first 2 today)
+            return res.status(200).json({ status: true, message: "Free transaction allowed." });
         }
 
-        return res.status(200).json({ status: true, message: "You can proceed" });
+        // ✅ Check if user funded ₦100 today
+        const dummyEmail = `${user.username}@opay.com`;
+
+        const todayFunding = await PaymentDB.findOne({
+            customerEmail: dummyEmail,
+            amount: 100, // Webhook already converts from kobo
+            status: 'success',
+            paidAt: { $gte: startOfToday, $lte: endOfToday }
+        });
+
+        if (todayFunding) {
+            return res.status(200).json({ status: true, message: "₦100 funded. Unlimited access for today." });
+        }
+
+        // ❌ No access
+        return res.status(403).json({
+            status: false,
+            message: "Limit reached. Fund ₦100 to unlock unlimited access today."
+        });
 
     } catch (err) {
-        console.error(err);
+        console.error("Transaction check error:", err.message);
         return res.status(401).json({ status: false, message: "Invalid token" });
     }
+};
 
-}
 
 
 module.exports.setUnlimited = async (req, res) => {
