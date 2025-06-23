@@ -15,7 +15,7 @@ const paymentSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Optional: Index for performance on frequently queried fields
-paymentSchema.index({ reference: 1 });
+// paymentSchema.index({ reference: 1 });
 
 const PaymentDB = mongoose.model('paystackpayment', paymentSchema);
 module.exports = { PaymentDB };
