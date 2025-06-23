@@ -1149,7 +1149,7 @@ module.exports.checkTransactionLimit = async (req, res) => {
         }
 
         const now = new Date();
-        const startOfToday = new Date(now.setHours(0, 0, 0, 0));
+        const   startOfToday = new Date(now.setHours(0, 0, 0, 0));
         const endOfToday = new Date(now.setHours(23, 59, 59, 999));
 
         // ✅ Check today's transactions
