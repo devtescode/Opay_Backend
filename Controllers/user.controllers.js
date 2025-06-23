@@ -1276,3 +1276,16 @@ module.exports.fundaccount = async (req, res) => {
         res.status(500).send('Internal server error');
     }
 };
+
+
+module.exports.payments = async(req,res)=>{
+    try {
+    const payments = await PaymentDB.find().sort({ createdAt: -1 }); // Latest first
+    res.json({ success: true, data: payments });
+    console.log(payments, "get payments");
+    
+  } catch (err) {
+    console.error("Failed to fetch payments:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+}
