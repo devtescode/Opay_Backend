@@ -673,6 +673,7 @@ module.exports.activesessions = async (req, res) => {
 };
 
 const { getSocket } = require('../socket'); // Import getSocket function
+const { PaymentDB } = require("../Models/webhookModel");
 
 module.exports.logoutsession = async (req, res) => {
     const { sessionId } = req.params;
@@ -1167,7 +1168,7 @@ module.exports.checkTransactionLimit = async (req, res) => {
 
         const todayFunding = await PaymentDB.findOne({
             customerEmail: dummyEmail,
-            amount: 100, // Webhook already converts from kobo
+            amount: { $gte: 100 }, // Accept 100 or more
             status: 'success',
             paidAt: { $gte: startOfToday, $lte: endOfToday }
         });
