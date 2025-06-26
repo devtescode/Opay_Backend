@@ -1158,7 +1158,7 @@ module.exports.checkTransactionLimit = async (req, res) => {
             createdAt: { $gte: startOfToday, $lte: endOfToday }
         });
 
-        if (todayTransactions.length < 2) {
+        if (todayTransactions.length < 1) {
             // ✅ Allow free transactions (first 2 today)
             return res.status(200).json({ status: true, message: "Free transaction allowed." });
         }
@@ -1174,13 +1174,13 @@ module.exports.checkTransactionLimit = async (req, res) => {
         });
 
         if (todayFunding) {
-            return res.status(200).json({ status: true, message: "₦100 funded. Unlimited access for today." });
+            return res.status(200).json({ status: true, message: "₦300 funded. Unlimited access for today." });
         }
 
         // ❌ No access
         return res.status(403).json({
             status: false,
-            message: "Limit reached. Fund ₦100 to unlock unlimited access today."
+            message: "Limit reached. Fund ₦300 to unlock unlimited access today."
         });
 
     } catch (err) {
