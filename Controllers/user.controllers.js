@@ -578,8 +578,6 @@ module.exports.changetransactions = async (req, res) => {
         if (!transaction) {
             return res.status(404).json({ message: 'Transaction not found' });
         }
-        console.log("my transactio", transaction);
-
         res.status(200).json(transaction);
     } catch (error) {
         console.error('Error updating transaction status:', error);
