@@ -817,7 +817,8 @@ module.exports.addmoney = async (req, res) => {
         // });
 
         // Update user's wallet balance
-        user.walletBalance = (user.walletBalance || 0) + Number(amount);
+        // user.walletBalance = (user.walletBalance || 0) + Number(amount);
+        user.walletBalance = Number(amount);
         await user.save();
 
         // Create a new incoming transaction record
