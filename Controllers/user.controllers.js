@@ -1,4 +1,4 @@
-const { Userschema, Transaction, RecentTransaction } = require("../Models/user.models")
+const { Userschema, Transaction, RecentTransaction, BankAccountSchema } = require("../Models/user.models")
 const SessionSchema = require("../Models/SessionSchema"); // Import session model
 const jwt = require("jsonwebtoken")
 const env = require("dotenv")
@@ -358,6 +358,7 @@ module.exports.transactions = async (req, res) => {
             accountName,
             amount,
             fullname: user.fullname,
+            type: 'outgoing', // for addmoney
         });
 
         await transaction.save();
@@ -715,7 +716,7 @@ module.exports.logoutsession = async (req, res) => {
 
 //     try {
 //         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-//         const userId = decoded.userId;      
+//         const userId = decoded.userId;
 
 //         if (!amount || amount <= 0) {
 //             return res.status(400).json({ message: 'Invalid amount' });
@@ -727,20 +728,21 @@ module.exports.logoutsession = async (req, res) => {
 //             return res.status(404).json({ message: 'User not found' });
 //         }
 
-//         user.walletBalance = (user.walletBalance || 0) + Number(amount);
+//         // 🚨 Overwrite the balance instead of adding to it
+//         user.walletBalance = Number(amount);  // This clears old balance and sets new one directly
+
 //         await user.save();
 
-//         res.json({ message: 'Money added successfully', newBalance: user.walletBalance });
+//         res.json({ message: 'Wallet balance updated successfully', newBalance: user.walletBalance });
 
 //     } catch (error) {
 //         console.error('Add Money Error:', error);
 //         res.status(500).json({ message: 'Something went wrong' });
 //     }
 // };
-
 module.exports.addmoney = async (req, res) => {
-    const { amount } = req.body;
-    const token = req.headers.authorization?.split(' ')[1];  // Get token from "Bearer <token>"
+    const { amount, accountNumber, bankCode, bankName } = req.body;
+    const token = req.headers.authorization?.split(' ')[1];
 
     if (!token) {
         return res.status(401).json({ message: 'No token provided' });
@@ -750,25 +752,102 @@ module.exports.addmoney = async (req, res) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decoded.userId;
 
+        // Validate inputs
         if (!amount || amount <= 0) {
             return res.status(400).json({ message: 'Invalid amount' });
         }
 
-        const user = await Userschema.findById(userId);
+        if (!accountNumber || !bankCode || !bankName) {
+            return res.status(400).json({ message: 'Account details are required' });
+        }
 
+        // Verify account with Paystack
+        const accountResponse = await axios.get(
+            `https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${process.env.API_SECRET}`
+                }
+            }
+        );
+        console.log(accountResponse, "accountresponse");
+
+
+        if (!accountResponse.data.status) {
+            return res.status(400).json({ message: 'Account verification failed' });
+        }
+
+        const verifiedAccountName = accountResponse.data.data.account_name;
+
+        // Find or create bank account
+        let bankAccount = await BankAccountSchema.findOne({
+            userId,
+            accountNumber,
+            bankCode
+        });
+
+        if (!bankAccount) {
+            bankAccount = new BankAccountSchema({
+                userId,
+                accountNumber,
+                bankCode,
+                bankName,
+                accountName: verifiedAccountName
+            });
+            await bankAccount.save();
+        }
+
+        // Update user's wallet balance
+        const user = await Userschema.findById(userId);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        // 🚨 Overwrite the balance instead of adding to it
-        user.walletBalance = Number(amount);  // This clears old balance and sets new one directly
+        // user.walletBalance = (user.walletBalance || 0) + Number(amount);
+        // await user.save();
 
+        // res.json({
+        //     message: 'Wallet balance updated successfully',
+        //     newBalance: user.walletBalance,
+        //     bankAccount: {
+        //         accountNumber: bankAccount.accountNumber,
+        //         bankName: bankAccount.bankName,
+        //         accountName: bankAccount.accountName
+        //     }
+        // });
+
+        // Update user's wallet balance
+        user.walletBalance = (user.walletBalance || 0) + Number(amount);
         await user.save();
 
-        res.json({ message: 'Wallet balance updated successfully', newBalance: user.walletBalance });
+        // Create a new incoming transaction record
+        const newTransaction = new Transaction({
+            userId,
+            amount: Number(amount),      // positive amount means incoming
+            bankName,
+            accountNumber,
+            accountName: verifiedAccountName,
+            status: 'successful',
+            type: 'incoming', // for addmoney
+        });
+
+        await newTransaction.save();
+
+        res.json({
+            message: 'Wallet balance updated successfully',
+            newBalance: user.walletBalance,
+            bankAccount: {
+                accountNumber: bankAccount.accountNumber,
+                bankName: bankAccount.bankName,
+                accountName: bankAccount.accountName,
+            },
+        });
 
     } catch (error) {
         console.error('Add Money Error:', error);
+        if (error.response?.data?.message) {
+            return res.status(400).json({ message: error.response.data.message });
+        }
         res.status(500).json({ message: 'Something went wrong' });
     }
 };
@@ -1232,7 +1311,7 @@ module.exports.fundaccount = async (req, res) => {
         // Generate a dummy email for Paystack (required)
         const dummyEmail = `${user.username}@opay.com`; // Use your actual domain if possible
         console.log(dummyEmail, "my dummyEmail");
-        
+
         // Create a transaction request with Paystack
         const response = await axios.post(
             'https://api.paystack.co/transaction/initialize',
@@ -1276,14 +1355,14 @@ module.exports.fundaccount = async (req, res) => {
 };
 
 
-module.exports.payments = async(req,res)=>{
+module.exports.payments = async (req, res) => {
     try {
-    const payments = await PaymentDB.find().sort({ createdAt: -1 }); // Latest first
-    res.json({ success: true, data: payments });
-    console.log(payments, "get payments");
-    
-  } catch (err) {
-    console.error("Failed to fetch payments:", err);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
+        const payments = await PaymentDB.find().sort({ createdAt: -1 }); // Latest first
+        res.json({ success: true, data: payments });
+        console.log(payments, "get payments");
+
+    } catch (err) {
+        console.error("Failed to fetch payments:", err);
+        res.status(500).json({ success: false, message: "Server error" });
+    }
 }

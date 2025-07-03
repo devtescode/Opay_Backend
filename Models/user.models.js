@@ -53,7 +53,7 @@ let schema = mongoose.Schema({
   profilePicture: {
     type: String,
   },
-  isUnlimited: { type: Boolean, default: false }, // ✅ this must exist
+  isUnlimited: { type: Boolean, default: false },
 }, { timestamps: true });
 
 
@@ -90,15 +90,12 @@ const transactionSchema = new mongoose.Schema(
       enum: ['successful', 'pending', 'failed', 'Reversed'], // Optional: Track transaction status
       default: 'successful',
     },
-    isUnlimited: {
-      type: Boolean,
-      default: false,
-    },
-    isLimited: {
-      type: Boolean,
-      default: true,
+    type: {
+      type: String,
+      enum: ['incoming', 'outgoing'],
+      required: true
     }
-
+    
   },
   { timestamps: true }
 );
@@ -126,6 +123,38 @@ const transactionDetailsSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+const bankAccountSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'useropay',
+    required: true
+  },
+  accountNumber: {
+    type: String,
+    required: true
+  },
+  bankCode: {
+    type: String,
+    required: true
+  },
+  bankName: {
+    type: String,
+    required: true
+  },
+  accountName: {
+    type: String,
+    required: true
+  },
+  isDefault: {
+    type: Boolean,
+    default: false
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
 
 
 
@@ -165,6 +194,7 @@ schema.methods.compareUser = async function (userPass) {
 const Userschema = mongoose.model("useropay", schema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
 const RecentTransaction = mongoose.model("recentdetail", transactionDetailsSchema);
+const BankAccountSchema = mongoose.model("bankaccountschema", bankAccountSchema);
 
 // module.exports = mongoose.model('Transaction', transactionSchema);
-module.exports = { Userschema, Transaction, RecentTransaction };
+module.exports = { Userschema, Transaction, RecentTransaction, BankAccountSchema };
