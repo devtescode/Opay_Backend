@@ -1211,6 +1211,62 @@ module.exports.reverseTransaction = async (req, res) => {
 };
 
 
+// module.exports.checkTransactionLimit = async (req, res) => {
+//     const { token } = req.body;
+
+//     try {
+//         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+//         const userId = decoded.userId;
+
+//         const user = await Userschema.findById(userId);
+//         if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+//         // ✅ Always allow unlimited users
+//         if (user.isUnlimited) {
+//             return res.status(200).json({ status: true, message: "Unlimited user. Access granted." });
+//         }
+
+//         const now = new Date();
+//         const startOfToday = new Date(now.setHours(0, 0, 0, 0));
+//         const endOfToday = new Date(now.setHours(23, 59, 59, 999));
+
+//         // ✅ Check today's transactions
+//         const todayTransactions = await Transaction.find({
+//             userId,
+//             createdAt: { $gte: startOfToday, $lte: endOfToday }
+//         });
+
+//         if (todayTransactions.length < 1) {
+//             // ✅ Allow free transactions (first 2 today)
+//             return res.status(200).json({ status: true, message: "Free transaction allowed." });
+//         }
+
+//         // ✅ Check if user funded ₦100 today
+//         const dummyEmail = `${user.username}@opay.com`;
+
+//         const todayFunding = await PaymentDB.findOne({
+//             customerEmail: dummyEmail,
+//             amount: { $gte: 300 }, // Accept 100 or more
+//             status: 'success',
+//             paidAt: { $gte: startOfToday, $lte: endOfToday }
+//         });
+
+//         if (todayFunding) {
+//             return res.status(200).json({ status: true, message: "₦300 funded. Unlimited access for today." });
+//         }
+
+//         return res.status(403).json({
+//             status: false,
+//             message: "Limit reached. Fund ₦300 to unlock unlimited access today."
+//         });
+
+//     } catch (err) {
+//         console.error("Transaction check error:", err.message);
+//         return res.status(401).json({ status: false, message: "Invalid token" });
+//     }
+// };
+
+
 module.exports.checkTransactionLimit = async (req, res) => {
     const { token } = req.body;
 
@@ -1230,23 +1286,24 @@ module.exports.checkTransactionLimit = async (req, res) => {
         const startOfToday = new Date(now.setHours(0, 0, 0, 0));
         const endOfToday = new Date(now.setHours(23, 59, 59, 999));
 
-        // ✅ Check today's transactions
+        // ✅ Only count OUTGOING transactions
         const todayTransactions = await Transaction.find({
             userId,
+            type: 'outgoing', // ✅ Only count outgoing transactions
             createdAt: { $gte: startOfToday, $lte: endOfToday }
         });
 
         if (todayTransactions.length < 1) {
-            // ✅ Allow free transactions (first 2 today)
+            // ✅ Allow free transactions (first one today)
             return res.status(200).json({ status: true, message: "Free transaction allowed." });
         }
 
-        // ✅ Check if user funded ₦100 today
+        // ✅ Check if user funded ₦300 today
         const dummyEmail = `${user.username}@opay.com`;
 
         const todayFunding = await PaymentDB.findOne({
             customerEmail: dummyEmail,
-            amount: { $gte: 300 }, // Accept 100 or more
+            amount: { $gte: 300 },
             status: 'success',
             paidAt: { $gte: startOfToday, $lte: endOfToday }
         });
@@ -1255,7 +1312,6 @@ module.exports.checkTransactionLimit = async (req, res) => {
             return res.status(200).json({ status: true, message: "₦300 funded. Unlimited access for today." });
         }
 
-        // ❌ No access
         return res.status(403).json({
             status: false,
             message: "Limit reached. Fund ₦300 to unlock unlimited access today."
@@ -1266,6 +1322,7 @@ module.exports.checkTransactionLimit = async (req, res) => {
         return res.status(401).json({ status: false, message: "Invalid token" });
     }
 };
+
 
 
 
