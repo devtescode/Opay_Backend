@@ -567,19 +567,15 @@ module.exports.changetransactions = async (req, res) => {
         if (!['successful', 'pending', 'failed'].includes(status)) {
             return res.status(400).json({ message: 'Invalid status value' });
         }
-
-        // First, find the transaction by ID
         const transaction = await Transaction.findById(transactionId);
         if (!transaction) {
             return res.status(404).json({ message: 'Transaction not found' });
         }
 
-        // Prevent updating if the transaction is incoming
         if (transaction.type === 'incoming') {
             return res.status(403).json({ message: 'Cannot change status of an incoming transaction' });
         }
 
-        // Update the transaction's status
         transaction.status = status;
         await transaction.save();
 
