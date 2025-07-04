@@ -559,7 +559,8 @@ module.exports.deleteuserTransaction = async (req, res) => {
 module.exports.changetransactions = async (req, res) => {
     try {
         const { transactionId } = req.params;
-        const { status } = req.body; // Get the status from the request body
+        const { status } = req.body;
+
         console.log(status, transactionId);
 
         // Validate that the status is one of the allowed values
@@ -567,24 +568,28 @@ module.exports.changetransactions = async (req, res) => {
             return res.status(400).json({ message: 'Invalid status value' });
         }
 
-        // Find and update the transaction's status
-        const transaction = await Transaction.findByIdAndUpdate(
-            transactionId,
-            { status },
-            { new: true } // Return the updated document
-        );
-        console.log("fecthing trna scffo", transaction);
-
-
+        // First, find the transaction by ID
+        const transaction = await Transaction.findById(transactionId);
         if (!transaction) {
             return res.status(404).json({ message: 'Transaction not found' });
         }
+
+        // Prevent updating if the transaction is incoming
+        if (transaction.type === 'incoming') {
+            return res.status(403).json({ message: 'Cannot change status of an incoming transaction' });
+        }
+
+        // Update the transaction's status
+        transaction.status = status;
+        await transaction.save();
+
         res.status(200).json(transaction);
     } catch (error) {
         console.error('Error updating transaction status:', error);
         res.status(500).json({ message: 'Failed to update transaction status' });
     }
-}
+};
+
 
 
 module.exports.getlasttwotrnasaction = async (req, res) => {
