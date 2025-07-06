@@ -1439,8 +1439,6 @@ module.exports.funding = async(req, res)=>{
 } 
 
 module.exports.delectfunding = async(req, res)=>{
-    // DELETE /funding/:id
-// router.delete('/funding/:id', async (req, res) => {
     try {
       const transaction = await Transaction.findById(req.params.id);
   
@@ -1456,7 +1454,5 @@ module.exports.delectfunding = async(req, res)=>{
       res.status(200).json({ message: "Transaction deleted successfully" });
     } catch (err) {
       res.status(500).json({ message: "Error deleting transaction" });
-    }
-//   });
-  
+    }  
 }
