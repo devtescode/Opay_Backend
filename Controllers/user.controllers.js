@@ -424,8 +424,11 @@ module.exports.gettransactions = async (req, res) => {
 module.exports.getCounts = async (req, res) => {
     try {
         const userCount = await Userschema.countDocuments();
-        const transactionCount = await Transaction.countDocuments();
-        const totalCount = userCount + transactionCount; // Sum of users and transactions
+
+        // Count only non-incoming transactions (outgoing or others)
+        const transactionCount = await Transaction.countDocuments({ type: { $ne: "incoming" } });
+
+        const totalCount = userCount + transactionCount;
 
         res.status(200).json({
             userCount,
@@ -437,6 +440,7 @@ module.exports.getCounts = async (req, res) => {
         res.status(500).json({ message: 'Failed to fetch counts.' });
     }
 }
+
 
 module.exports.saveRecentTransaction = async (req, res) => {
     const { userId, accountDetails } = req.body;
