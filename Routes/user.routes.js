@@ -1,5 +1,5 @@
 const express = require("express")
-const { userWelcome, adminlogin, createUser, userlogin, useraccount, transactions, getransactions, getallusers, gettransactions, getCounts, saveRecentTransaction, getrecentransaction, deleterecenttransaction, deleteuserTransaction, changetransactions, getlasttwotrnasaction, blockUser, unblockUser, activesessions, logoutsession, addmoney, getuserbalance, updatebalance, getTotalBalance, getMoneyOut, updatemoneyout, getrecentransactionsearch, upload, changepassword, changeadminpassword, reverseTransaction, checkTransactionLimit, setUnlimited, fundaccount, payments } = require("../Controllers/user.controllers")
+const { userWelcome, adminlogin, createUser, userlogin, useraccount, transactions, getransactions, getallusers, gettransactions, getCounts, saveRecentTransaction, getrecentransaction, deleterecenttransaction, deleteuserTransaction, changetransactions, getlasttwotrnasaction, blockUser, unblockUser, activesessions, logoutsession, addmoney, getuserbalance, updatebalance, getTotalBalance, getMoneyOut, updatemoneyout, getrecentransactionsearch, upload, changepassword, changeadminpassword, reverseTransaction, checkTransactionLimit, setUnlimited, fundaccount, payments, funding, delectfunding } = require("../Controllers/user.controllers")
 const router = express.Router()
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
@@ -68,5 +68,6 @@ router.post("/checkTransactionLimit", checkTransactionLimit)
 router.post("/setUnlimited", setUnlimited)
 router.post("/fundaccount", fundaccount)
 router.get("/payments", payments)
-
+router.get("/funding", funding)
+router.delete("/delectfunding/:id", delectfunding)
 module.exports = router

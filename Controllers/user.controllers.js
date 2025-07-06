@@ -1425,3 +1425,38 @@ module.exports.payments = async (req, res) => {
         res.status(500).json({ success: false, message: "Server error" });
     }
 }
+
+module.exports.funding = async(req, res)=>{
+    try {
+        const txns = await Transaction.find({ type: 'incoming' })
+          .populate('userId', 'username') // populate username only
+          .sort({ createdAt: -1 });
+        res.json(txns);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error" });
+      }
+} 
+
+module.exports.delectfunding = async(req, res)=>{
+    // DELETE /funding/:id
+// router.delete('/funding/:id', async (req, res) => {
+    try {
+      const transaction = await Transaction.findById(req.params.id);
+  
+      if (!transaction) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+  
+      if (transaction.type !== "incoming") {
+        return res.status(403).json({ message: "You can only delete incoming transactions" });
+      }
+  
+      await Transaction.findByIdAndDelete(req.params.id);
+      res.status(200).json({ message: "Transaction deleted successfully" });
+    } catch (err) {
+      res.status(500).json({ message: "Error deleting transaction" });
+    }
+//   });
+  
+}
