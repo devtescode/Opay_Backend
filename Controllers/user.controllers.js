@@ -1460,3 +1460,20 @@ module.exports.delectfunding = async(req, res)=>{
       res.status(500).json({ message: "Error deleting transaction" });
     }  
 }
+
+// RecentTransaction
+module.exports.getRecentTransactionsbyOpay = async (req, res) => {
+    try {
+    const recents = await RecentTransaction.find({
+      userId: req.params.userId,
+      bankName: { $regex: /^opay$/i }
+    })
+      .sort({ createdAt: -1 }) // newest first
+      .limit(3); // only last 3
+
+    res.json({ status: true, recents });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ status: false, message: "Error fetching OPay recents" });
+  }
+}
