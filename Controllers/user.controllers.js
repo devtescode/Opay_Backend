@@ -421,7 +421,7 @@ module.exports.getransactions = async (req, res) => {
     try {
         const { userId } = req.params; // Assuming you pass userId in the URL
         const { limit, skip } = getPagination(req);
-        const { month, year } = req.query;
+        const { month, year, type } = req.query;
 
         // Optional calendar month filter, e.g. ?month=3&year=2026
         const filter = { userId };
@@ -429,6 +429,11 @@ module.exports.getransactions = async (req, res) => {
             const start = new Date(Number(year), Number(month) - 1, 1);
             const end = new Date(Number(year), Number(month), 1);
             filter.createdAt = { $gte: start, $lt: end };
+        }
+
+        // Optional direction filter, e.g. ?type=outgoing
+        if (type === 'incoming' || type === 'outgoing') {
+            filter.type = type;
         }
 
         const [transactions, total] = await Promise.all([
