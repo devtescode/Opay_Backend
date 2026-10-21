@@ -1,5 +1,5 @@
 const express = require("express")
-const { userWelcome, adminlogin, createUser, userlogin, useraccount, transactions, getransactions, getallusers, gettransactions, getCounts, saveRecentTransaction, getrecentransaction, deleterecenttransaction, deleteuserTransaction, changetransactions, getlasttwotrnasaction, blockUser, unblockUser, activesessions, logoutsession, addmoney, getuserbalance, updatebalance, getTotalBalance, getMoneyOut, updatemoneyout, getrecentransactionsearch, upload, changepassword, changeadminpassword, reverseTransaction, checkTransactionLimit, setUnlimited, fundaccount, payments, funding, delectfunding, getRecentTransactionsbyOpay, sessionstatus } = require("../Controllers/user.controllers")
+const { userWelcome, adminlogin, createUser, userlogin, useraccount, transactions, getransactions, getallusers, gettransactions, getCounts, saveRecentTransaction, getrecentransaction, deleterecenttransaction, deleteuserTransaction, changetransactions, getlasttwotrnasaction, blockUser, unblockUser, activesessions, logoutsession, addmoney, getuserbalance, updatebalance, getTotalBalance, getMoneyOut, updatemoneyout, getrecentransactionsearch, upload, changepassword, changeadminpassword, reverseTransaction, checkTransactionLimit, setUnlimited, fundaccount, payments, funding, delectfunding, getRecentTransactionsbyOpay, sessionstatus, userLogout } = require("../Controllers/user.controllers")
 const router = express.Router()
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
@@ -66,6 +66,7 @@ router.delete("/deleterecenttransaction/:transactionId", authenticate, requireUs
 router.put("/changetransactions/:transactionId", authenticate, requireUser, changetransactions)
 router.put("/reverseTransaction/:id", authenticate, requireUser, reverseTransaction)
 router.get("/sessionstatus", authenticate, requireUser, sessionstatus)
+router.post("/logout", authenticate, requireUser, userLogout);
 
 /* ------------------------------------------------------------------ *
  * Admin routes (role: 'admin')

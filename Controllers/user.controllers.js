@@ -253,6 +253,43 @@ module.exports.userlogin = async (req, res) => {
 
 
 
+module.exports.userLogout = async (req, res) => {
+    console.log("hittttttttttt")
+    try {
+        const userId = req.auth?.userId;
+        const sessionId = req.auth?.sessionId;
+
+        if (!userId || !sessionId) {
+            return res.status(401).json({
+                status: false,
+                message: "Invalid or missing session."
+            });
+        }
+
+        const deletedSession = await SessionSchema.findOneAndDelete({
+            _id: sessionId,
+            userId
+        });
+        console.log(deletedSession, "delectsessipojmn")
+
+        return res.status(200).json({
+            status: true,
+            message: deletedSession
+                ? "Logout successful."
+                : "Session already logged out.",
+            active: false
+        });
+    } catch (error) {
+        console.error("Logout error:", error);
+
+        return res.status(500).json({
+            status: false,
+            message: "Failed to log out."
+        });
+    }
+};
+
+
 
 // Device Info: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 IP: ::1
 
