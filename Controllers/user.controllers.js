@@ -7,6 +7,31 @@ const bcrypt = require("bcryptjs")
 const { default: axios } = require("axios")
 const ADMIN_SECRET_KEY = process.env.JWT_SECRET_KEY
 const cloudinary = require('cloudinary').v2;
+const { ownsResource } = require("../Middleware/auth");
+
+/**
+ * Reads ?page / ?limit from the query string and returns a mongo-friendly
+ * { page, limit, skip } object. Defaults keep the old behaviour for
+ * clients that do not paginate.
+ */
+const getPagination = (req) => {
+  const rawPage = parseInt(req.query.page, 10);
+  const rawLimit = parseInt(req.query.limit, 10);
+
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 50;
+
+  return { page, limit, skip: (page - 1) * limit };
+};
+
+/**
+ * Sends the total number of matching documents alongside a paginated array
+ * so the client can render pagination controls without a second request.
+ */
+const setTotalCountHeader = (res, total) => {
+  res.setHeader('X-Total-Count', String(total));
+  res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count');
+};
 env.config()
 
 
@@ -195,7 +220,14 @@ module.exports.userlogin = async (req, res) => {
         }
 
         const token = jwt.sign(
-            { userId: matchedUser._id, username: matchedUser.username, role: matchedUser.role },
+            {
+                userId: matchedUser._id,
+                username: matchedUser.username,
+                role: matchedUser.role,
+                // The session id lets the client poll whether its session is
+                // still alive (replaces the old socket.io push event).
+                sessionId: session._id.toString(),
+            },
             process.env.JWT_SECRET,
             { expiresIn: '1h' }
         );
@@ -335,8 +367,6 @@ module.exports.useraccount = async (req, res) => {
 
 
 module.exports.transactions = async (req, res) => {
-    console.log(req.body);
-
     try {
         const { userId, bankName, accountNumber, accountName, amount } = req.body;
 
@@ -344,8 +374,12 @@ module.exports.transactions = async (req, res) => {
             return res.status(400).json({ message: 'All required fields must be provided' });
         }
 
+        // A user can only record transactions against their own account
+        if (String(req.auth?.userId) !== String(userId)) {
+            return res.status(403).json({ message: 'You can only create your own transactions' });
+        }
+
         const user = await Userschema.findById(userId);
-        console.log(user, "The userid");
 
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
@@ -386,9 +420,24 @@ module.exports.transactions = async (req, res) => {
 module.exports.getransactions = async (req, res) => {
     try {
         const { userId } = req.params; // Assuming you pass userId in the URL
-        const transactions = await Transaction.find({ userId }).sort({ createdAt: -1 });
+        const { limit, skip } = getPagination(req);
+        const { month, year } = req.query;
+
+        // Optional calendar month filter, e.g. ?month=3&year=2026
+        const filter = { userId };
+        if (month && year) {
+            const start = new Date(Number(year), Number(month) - 1, 1);
+            const end = new Date(Number(year), Number(month), 1);
+            filter.createdAt = { $gte: start, $lt: end };
+        }
+
+        const [transactions, total] = await Promise.all([
+            Transaction.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+            Transaction.countDocuments(filter),
+        ]);
+
+        setTotalCountHeader(res, total);
         res.status(200).json(transactions);
-        console.log(transactions);
 
     } catch (error) {
         console.error('Error fetching transaction history:', error);
@@ -398,7 +447,17 @@ module.exports.getransactions = async (req, res) => {
 
 module.exports.getallusers = async (req, res) => {
     try {
-        const users = await Userschema.find({}, "fullname username phoneNumber blocked walletBalance isUnlimited");
+        const { limit, skip } = getPagination(req);
+
+        const [users, total] = await Promise.all([
+            Userschema.find({}, "fullname username phoneNumber blocked walletBalance isUnlimited")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            Userschema.countDocuments(),
+        ]);
+
+        setTotalCountHeader(res, total);
         res.setHeader("Content-Type", "application/json");
         res.status(200).json(users);
 
@@ -412,9 +471,16 @@ module.exports.gettransactions = async (req, res) => {
     const { userId } = req.params;
 
     try {
-        const transactions = await Transaction.find({ userId }).sort({ createdAt: -1 }); // Sort by newest first
+        const { limit, skip } = getPagination(req);
+
+        const [transactions, total] = await Promise.all([
+            Transaction.find({ userId }).sort({ createdAt: -1 }).skip(skip).limit(limit),
+            Transaction.countDocuments({ userId }),
+        ]);
+
+        setTotalCountHeader(res, total);
         res.status(200).json(transactions);
-        //   console.log("get transactions",transactions);
+
     } catch (error) {
         console.error("Error fetching transactions:", error);
         res.status(500).json({ message: "Failed to fetch transactions." });
@@ -449,6 +515,11 @@ module.exports.saveRecentTransaction = async (req, res) => {
         // Validate the required fields
         if (!userId || !accountDetails) {
             return res.status(400).json({ message: "User ID and account details are required." });
+        }
+
+        // A user can only save beneficiaries against their own account
+        if (String(req.auth?.userId) !== String(userId)) {
+            return res.status(403).json({ message: "You can only save your own beneficiaries." });
         }
 
         const { accountName, accountNumber, bankName } = accountDetails;
@@ -506,32 +577,45 @@ module.exports.getrecentransaction = async (req, res) => {
         const limit = showAll === "true" ? 0 : 3; // 0 means no limit, fetch all transactions if 'showAll' is true
 
         // Fetch transactions
-        const transactions = await RecentTransaction.find({ userId })
-            .sort({ createdAt: -1 }) // Sort by creation date, most recent first
-            .limit(limit === 0 ? undefined : limit); // Only limit to 3 unless showAll is true
-        console.log("All recent transactions", transactions)
-        if (!transactions || transactions.length === 0) {
-            return res.status(404).json({ message: "No transactions found." });
+        const query = RecentTransaction.find({ userId }).sort({ createdAt: -1 }); // Sort by creation date, most recent first
+
+        if (limit !== 0) {
+            query.limit(limit);
         }
 
-        return res.status(200).json(transactions); // Return the transactions in the response
+        const [transactions, total] = await Promise.all([
+            query,
+            RecentTransaction.countDocuments({ userId }),
+        ]);
+
+        setTotalCountHeader(res, total);
+
+        // An empty list is a valid state (the user has no saved beneficiaries
+        // yet) - returning 404 here would surface as an error in the client.
+        return res.status(200).json(transactions);
     } catch (error) {
         console.error("Error fetching transactions:", error);
         return res.status(500).json({ message: "Failed to fetch transactions." });
     }
-    //  
+    //
 }
 
 module.exports.deleterecenttransaction = async (req, res) => {
     try {
         const { transactionId } = req.params;  // Use the correct parameter name here
 
-        // Find and delete the transaction
-        const transaction = await RecentTransaction.findByIdAndDelete(transactionId);
+        // Find the transaction first so the owner can be verified
+        const transaction = await RecentTransaction.findById(transactionId);
 
         if (!transaction) {
             return res.status(404).json({ message: "Transaction not found" });
         }
+
+        if (!ownsResource(req, res, transaction.userId)) {
+            return res.status(403).json({ message: "You can only delete your own records" });
+        }
+
+        await RecentTransaction.findByIdAndDelete(transactionId);
 
         res.status(200).json({ message: "Transaction deleted successfully" });
     } catch (error) {
@@ -576,6 +660,10 @@ module.exports.changetransactions = async (req, res) => {
             return res.status(404).json({ message: 'Transaction not found' });
         }
 
+        if (!ownsResource(req, res, transaction.userId)) {
+            return res.status(403).json({ message: 'You can only update your own transactions' });
+        }
+
         if (transaction.type === 'incoming') {
             return res.status(403).json({ message: 'Cannot change status of an incoming transaction' });
         }
@@ -593,11 +681,16 @@ module.exports.changetransactions = async (req, res) => {
 
 
 module.exports.getlasttwotrnasaction = async (req, res) => {
-    const { userId } = req.params;
-    const transactions = await Transaction.find({ userId })
-        .sort({ createdAt: -1 }) // Sort by newest
-        .limit(2); // Fetch only the last two
-    res.json(transactions);
+    try {
+        const { userId } = req.params;
+        const transactions = await Transaction.find({ userId })
+            .sort({ createdAt: -1 }) // Sort by newest
+            .limit(2); // Fetch only the last two
+        res.json(transactions);
+    } catch (error) {
+        console.error('Error fetching recent transactions:', error);
+        res.status(500).json({ message: 'Failed to fetch recent transactions' });
+    }
 }
 
 
@@ -648,10 +741,10 @@ module.exports.unblockUser = async (req, res) => {
 module.exports.activesessions = async (req, res) => {
     try {
         const sessions = await SessionSchema.find().populate('userId', 'username');
-        // console.log("Active user", sessions);
 
+        // An empty list is a valid state - the client renders an empty table.
         if (sessions.length === 0) {
-            return res.status(404).json({ message: 'No active sessions found' });
+            return res.status(200).json([]);
         }
 
         // Group sessions by deviceInfo and keep the latest session per device
@@ -676,37 +769,54 @@ module.exports.activesessions = async (req, res) => {
     }
 };
 
-const { getSocket } = require('../socket'); // Import getSocket function
 const { PaymentDB } = require("../Models/webhookModel");
 
 module.exports.logoutsession = async (req, res) => {
     const { sessionId } = req.params;
 
     try {
-        // Ensure that io is initialized before using it
-        const io = getSocket(); // This will throw an error if socket is not initialized
-
         // Find the session from the database
         const session = await SessionSchema.findById(sessionId);
-        console.log("All session:", session);
 
         if (!session) {
             return res.status(404).json({ message: "Session not found" });
         }
 
-        // Delete the session from the database
+        // Delete the session from the database. The client polls
+        // GET /sessionstatus and picks the deletion up on its next tick,
+        // so no push channel is needed here.
         await SessionSchema.findByIdAndDelete(sessionId);
 
-        // Emit event to the client-side about the session logout
-        io.emit("sessionLoggedOut", { sessionId });
-        console.log("Session logged out successfully", sessionId);
-
-        // Send response back to the client
         res.status(200).json({ message: "Session logged out successfully" });
 
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Error logging out session" });
+    }
+};
+
+/**
+ * Reports whether the caller's session is still alive.
+ * Replaces the socket.io "sessionLoggedOut" push event.
+ */
+module.exports.sessionstatus = async (req, res) => {
+    try {
+        const sessionId = req.auth?.sessionId;
+
+        if (!sessionId) {
+            return res.status(200).json({ status: true, active: true, sessionId: null });
+        }
+
+        const session = await SessionSchema.findById(sessionId).select('_id');
+
+        return res.status(200).json({
+            status: true,
+            active: Boolean(session),
+            sessionId,
+        });
+    } catch (error) {
+        console.error("Error fetching session status:", error);
+        res.status(500).json({ status: false, message: "Failed to fetch session status" });
     }
 };
 
@@ -860,16 +970,13 @@ module.exports.addmoney = async (req, res) => {
 
 
 module.exports.getuserbalance = async (req, res) => {
-    const token = req.headers.authorization?.split(' ')[1];
-
-    if (!token) {
-        return res.status(401).json({ message: 'No token provided' });
-    }
-
     try {
-        // Verify token and get user ID
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.userId;
+        // The auth middleware already validated the bearer token
+        const userId = req.auth?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ message: 'No token provided' });
+        }
 
         // Find user by ID
         const user = await Userschema.findById(userId);
@@ -882,15 +989,6 @@ module.exports.getuserbalance = async (req, res) => {
 
     } catch (error) {
         console.error('Fetch Balance Error:', error.message);
-
-        // Detect token-related errors
-        if (
-            error.name === 'TokenExpiredError' ||
-            error.name === 'JsonWebTokenError'
-        ) {
-            return res.status(401).json({ message: 'Invalid or expired token' });
-        }
-
         res.status(500).json({ message: 'Failed to fetch user balance' });
     }
 };
@@ -898,15 +996,9 @@ module.exports.getuserbalance = async (req, res) => {
 
 module.exports.updatebalance = async (req, res) => {
     const { amount } = req.body;  // Amount to subtract
-    const token = req.headers.authorization?.split(' ')[1];
-
-    if (!token) {
-        return res.status(401).json({ message: 'No token provided' });
-    }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await Userschema.findById(decoded.userId);
+        const user = await Userschema.findById(req.auth?.userId);
 
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
@@ -942,60 +1034,36 @@ module.exports.getTotalBalance = async (req, res) => {
 
 
 module.exports.updatemoneyout = async (req, res) => {
-    // console.log("hit updatemoneyout");
-
-    // try {
-    //     const { userId, amount } = req.body;
-    //     // Find User and Update `moneyOut`
-    //     const user = await Userschema.findById(userId);
-    //     if (!user) return res.status(404).json({ message: 'User not found' });
-
-    //     user.moneyOut = (user.moneyOut || 0) + amount; // Add to existing moneyOut
-    //     await user.save();
-
-    //     res.json({ success: true, moneyOut: user.moneyOut });
-    // } catch (error) {
-    //     console.error('Error updating moneyOut:', error);
-    //     res.status(500).json({ message: 'Server error' });
-    // }
-    console.log("hit updatemoneyout");
-
     try {
         const { userId, amount } = req.body;
-        const token = req.headers['authorization']?.split(' ')[1];
 
-        // Verify JWT token
-        if (!token) {
+        if (!req.auth?.userId) {
             return res.status(401).json({ message: 'Access Denied. No Token Provided.' });
         }
 
-        jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-            if (err) {
-                if (err.name === 'TokenExpiredError') {
-                    return res.status(401).json({ message: 'TokenExpiredError' });
-                }
-                return res.status(403).json({ message: 'Invalid Token' });
-            }
+        // A user may only move their own money-out counter
+        if (String(req.auth.userId) !== String(userId)) {
+            return res.status(403).json({ message: 'You can only update your own records' });
+        }
 
-            // Find User and Update `moneyOut`
-            const user = await Userschema.findById(userId);
-            if (!user) return res.status(404).json({ message: 'User not found' });
+        // Find User and Update `moneyOut`
+        const user = await Userschema.findById(userId);
+        if (!user) return res.status(404).json({ message: 'User not found' });
 
-            // Check if today is the last day of the month
-            const today = new Date();
-            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+        // Check if today is the last day of the month
+        const today = new Date();
+        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
 
-            if (today.getDate() === lastDay) {
-                // Delete the `moneyOut` field from the database
-                await Userschema.updateOne({ _id: userId }, { $unset: { moneyOut: 1 } });
-                console.log(`moneyOut field deleted for user ${userId} at month-end.`);
-                return res.json({ success: true, moneyOut: 0 }); // Send 0 to frontend
-            } else {
-                user.moneyOut = (user.moneyOut || 0) + amount; // Add to existing moneyOut
-                await user.save();
-                return res.json({ success: true, moneyOut: user.moneyOut });
-            }
-        });
+        if (today.getDate() === lastDay) {
+            // Delete the `moneyOut` field from the database
+            await Userschema.updateOne({ _id: userId }, { $unset: { moneyOut: 1 } });
+            console.log(`moneyOut field deleted for user ${userId} at month-end.`);
+            return res.json({ success: true, moneyOut: 0 }); // Send 0 to frontend
+        }
+
+        user.moneyOut = (user.moneyOut || 0) + amount; // Add to existing moneyOut
+        await user.save();
+        return res.json({ success: true, moneyOut: user.moneyOut });
     } catch (error) {
         console.error('Error updating moneyOut:', error);
         res.status(500).json({ message: 'Server error' });
@@ -1019,14 +1087,9 @@ module.exports.getrecentransactionsearch = async (req, res) => {
 
     try {
         // Fetch all transactions for the user, sorted by most recent
-        const transactions = await RecentTransaction.find({ userId })
+        const transactions = await RecentTransaction.find({ userId }).sort({ createdAt: -1 });
 
-        console.log("All recent transactions:", transactions);
-
-        if (!transactions || transactions.length === 0) {
-            return res.status(404).json({ message: "No transactions found." });
-        }
-
+        // An empty result is a valid state, not an error
         return res.status(200).json(transactions);
     } catch (error) {
         console.error("Error fetching transactions:", error);
@@ -1038,12 +1101,14 @@ module.exports.getrecentransactionsearch = async (req, res) => {
 module.exports.upload = async (req, res) => {
     try {
         const { userId } = req.body;
-        console.log("Received userId:", userId);
+
+        // A user can only change their own profile picture
+        if (String(req.auth?.userId) !== String(userId)) {
+            return res.status(403).json({ error: 'You can only update your own profile picture' });
+        }
 
         // Ensure userId is converted to ObjectId
         const user = await Userschema.findById(new mongoose.Types.ObjectId(userId));
-
-        console.log(user, "userdetails");
 
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
@@ -1201,6 +1266,10 @@ module.exports.reverseTransaction = async (req, res) => {
         const transaction = await Transaction.findById(id);
         if (!transaction) {
             return res.status(404).json({ message: "Transaction not found" });
+        }
+
+        if (!ownsResource(req, res, transaction.userId)) {
+            return res.status(403).json({ message: "You can only reverse your own transactions" });
         }
 
         if (transaction.status === "pending") {
@@ -1362,9 +1431,13 @@ module.exports.setUnlimited = async (req, res) => {
 
 module.exports.fundaccount = async (req, res) => {
     const { username, amount } = req.body;
-    console.log(req.body, "get the details");
 
     try {
+        // A user can only fund their own account
+        if (req.auth?.username && req.auth.username !== username) {
+            return res.status(403).json({ status: false, message: 'You can only fund your own account' });
+        }
+
         const user = await Userschema.findOne({ username: username });
 
         if (!user) {
@@ -1420,9 +1493,15 @@ module.exports.fundaccount = async (req, res) => {
 
 module.exports.payments = async (req, res) => {
     try {
-        const payments = await PaymentDB.find().sort({ createdAt: -1 }); // Latest first
+        const { limit, skip } = getPagination(req);
+
+        const [payments, total] = await Promise.all([
+            PaymentDB.find().sort({ createdAt: -1 }).skip(skip).limit(limit), // Latest first
+            PaymentDB.countDocuments(),
+        ]);
+
+        setTotalCountHeader(res, total);
         res.json({ success: true, data: payments });
-        console.log(payments, "get payments");
 
     } catch (err) {
         console.error("Failed to fetch payments:", err);
@@ -1432,15 +1511,25 @@ module.exports.payments = async (req, res) => {
 
 module.exports.funding = async(req, res)=>{
     try {
-        const txns = await Transaction.find({ type: 'incoming' })
-          .populate('userId', 'username') // populate username only
-          .sort({ createdAt: -1 });
+        const { limit, skip } = getPagination(req);
+        const filter = { type: 'incoming' };
+
+        const [txns, total] = await Promise.all([
+            Transaction.find(filter)
+                .populate('userId', 'username') // populate username only
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            Transaction.countDocuments(filter),
+        ]);
+
+        setTotalCountHeader(res, total);
         res.json(txns);
       } catch (err) {
         console.error(err);
         res.status(500).json({ message: "Server error" });
       }
-} 
+}
 
 module.exports.delectfunding = async(req, res)=>{
     try {

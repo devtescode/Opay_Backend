@@ -1,10 +1,10 @@
 const express = require("express")
-const { userWelcome, adminlogin, createUser, userlogin, useraccount, transactions, getransactions, getallusers, gettransactions, getCounts, saveRecentTransaction, getrecentransaction, deleterecenttransaction, deleteuserTransaction, changetransactions, getlasttwotrnasaction, blockUser, unblockUser, activesessions, logoutsession, addmoney, getuserbalance, updatebalance, getTotalBalance, getMoneyOut, updatemoneyout, getrecentransactionsearch, upload, changepassword, changeadminpassword, reverseTransaction, checkTransactionLimit, setUnlimited, fundaccount, payments, funding, delectfunding, getRecentTransactionsbyOpay } = require("../Controllers/user.controllers")
+const { userWelcome, adminlogin, createUser, userlogin, useraccount, transactions, getransactions, getallusers, gettransactions, getCounts, saveRecentTransaction, getrecentransaction, deleterecenttransaction, deleteuserTransaction, changetransactions, getlasttwotrnasaction, blockUser, unblockUser, activesessions, logoutsession, addmoney, getuserbalance, updatebalance, getTotalBalance, getMoneyOut, updatemoneyout, getrecentransactionsearch, upload, changepassword, changeadminpassword, reverseTransaction, checkTransactionLimit, setUnlimited, fundaccount, payments, funding, delectfunding, getRecentTransactionsbyOpay, sessionstatus } = require("../Controllers/user.controllers")
 const router = express.Router()
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
-
+const { authenticate, requireUser, requireAdmin, requireSelfOrAdmin } = require("../Middleware/auth");
 
 
 
@@ -24,7 +24,7 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'uploads', 
+    folder: 'uploads',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
   },
 });
@@ -32,43 +32,56 @@ const uploadpic = multer({ storage: storage });
 
 
 
-
+/* ------------------------------------------------------------------ *
+ * Public routes
+ * ------------------------------------------------------------------ */
 router.get("/user", userWelcome);
 router.post("/adminlogin", adminlogin)
 router.post("/createuser", createUser)
 router.post("/userlogin", userlogin)
-router.post("/useraccount", useraccount)
-router.post("/transactions", transactions)
-router.get("/getransactions/:userId", getransactions)
-router.get("/getallusers", getallusers)
-router.get("/gettransactions/:userId", gettransactions)
-router.get("/getCounts", getCounts)
-router.post("/saveRecentTransaction", saveRecentTransaction)
-router.get("/getrecentransaction/:userId", getrecentransaction)
-router.delete("/deleterecenttransaction/:transactionId", deleterecenttransaction)
-router.delete("/deleteuserTransaction/:id", deleteuserTransaction)
-router.put("/changetransactions/:transactionId", changetransactions)
-router.get("/getlasttwotrnasaction/:userId", getlasttwotrnasaction)
-router.put("/blockUser/:id", blockUser)
-router.put("/unblockUser/:id", unblockUser)
-router.get("/activesessions", activesessions)
-router.delete("/logoutsession/:sessionId", logoutsession)
-router.post("/addmoney", addmoney)
-router.get("/getuserbalance", getuserbalance)
-router.post("/updatebalance", updatebalance)
-router.get("/getTotalBalance", getTotalBalance)
-router.post("/updatemoneyout", updatemoneyout)
-router.get("/getMoneyOut/:userId", getMoneyOut)
-router.get("/getrecentransactionsearch/:userId", getrecentransactionsearch)
-router.post('/uploadpicture', uploadpic.single('image'), upload)
-router.post("/changepassword", changepassword)
-router.post("/changeadminpassword", changeadminpassword)
-router.put("/reverseTransaction/:id", reverseTransaction)
-router.post("/checkTransactionLimit", checkTransactionLimit)
-router.post("/setUnlimited", setUnlimited)
-router.post("/fundaccount", fundaccount)
-router.get("/payments", payments)
-router.get("/funding", funding)
-router.delete("/delectfunding/:id", delectfunding)
-router.get("/getRecentTransactionsbyOpay/:userId", getRecentTransactionsbyOpay)
+
+/* ------------------------------------------------------------------ *
+ * User routes (role: 'user')
+ * ------------------------------------------------------------------ */
+router.post("/useraccount", authenticate, requireUser, useraccount)
+router.post("/transactions", authenticate, requireUser, transactions)
+router.post("/saveRecentTransaction", authenticate, requireUser, saveRecentTransaction)
+router.post("/addmoney", authenticate, requireUser, addmoney)
+router.post("/updatebalance", authenticate, requireUser, updatebalance)
+router.post("/updatemoneyout", authenticate, requireUser, updatemoneyout)
+router.post("/changepassword", authenticate, requireUser, changepassword)
+router.post("/checkTransactionLimit", authenticate, requireUser, checkTransactionLimit)
+router.post("/fundaccount", authenticate, requireUser, fundaccount)
+router.post('/uploadpicture', authenticate, requireUser, uploadpic.single('image'), upload)
+
+router.get("/getuserbalance", authenticate, requireUser, getuserbalance)
+router.get("/getMoneyOut/:userId", authenticate, requireSelfOrAdmin, getMoneyOut)
+router.get("/getransactions/:userId", authenticate, requireSelfOrAdmin, getransactions)
+router.get("/gettransactions/:userId", authenticate, requireSelfOrAdmin, gettransactions)
+router.get("/getrecentransaction/:userId", authenticate, requireSelfOrAdmin, getrecentransaction)
+router.get("/getrecentransactionsearch/:userId", authenticate, requireSelfOrAdmin, getrecentransactionsearch)
+router.get("/getlasttwotrnasaction/:userId", authenticate, requireSelfOrAdmin, getlasttwotrnasaction)
+router.get("/getRecentTransactionsbyOpay/:userId", authenticate, requireSelfOrAdmin, getRecentTransactionsbyOpay)
+router.delete("/deleterecenttransaction/:transactionId", authenticate, requireUser, deleterecenttransaction)
+router.put("/changetransactions/:transactionId", authenticate, requireUser, changetransactions)
+router.put("/reverseTransaction/:id", authenticate, requireUser, reverseTransaction)
+router.get("/sessionstatus", authenticate, requireUser, sessionstatus)
+
+/* ------------------------------------------------------------------ *
+ * Admin routes (role: 'admin')
+ * ------------------------------------------------------------------ */
+router.get("/getallusers", authenticate, requireAdmin, getallusers)
+router.get("/getCounts", authenticate, requireAdmin, getCounts)
+router.get("/getTotalBalance", authenticate, requireAdmin, getTotalBalance)
+router.get("/activesessions", authenticate, requireAdmin, activesessions)
+router.get("/payments", authenticate, requireAdmin, payments)
+router.get("/funding", authenticate, requireAdmin, funding)
+router.delete("/delectfunding/:id", authenticate, requireAdmin, delectfunding)
+router.delete("/deleteuserTransaction/:id", authenticate, requireAdmin, deleteuserTransaction)
+router.put("/blockUser/:id", authenticate, requireAdmin, blockUser)
+router.put("/unblockUser/:id", authenticate, requireAdmin, unblockUser)
+router.post("/setUnlimited", authenticate, requireAdmin, setUnlimited)
+router.delete("/logoutsession/:sessionId", authenticate, requireAdmin, logoutsession)
+router.post("/changeadminpassword", authenticate, requireAdmin, changeadminpassword)
+
 module.exports = router

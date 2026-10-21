@@ -1,14 +1,11 @@
 const express = require('express');
-const http = require('http');
 const mongoose = require('mongoose');
 require('dotenv').config();
 const cors = require('cors');
 const userRoutes = require('./Routes/user.routes');
-const { initializeSocket } = require('./socket'); // Import socket initializer
 const paystackroute = require('./Controllers/paystackWebhook');
 
 const app = express();
-const server = http.createServer(app); // Create the server instance
 const PORT = process.env.PORT || 4000;
 const URI = process.env.URI;
 
@@ -25,16 +22,13 @@ mongoose
         console.error('Database connection error:', err);
     });
 
-initializeSocket(server);
-
 app.use('/useropay', userRoutes);
 
-app.use('/api/paystack', 
-  express.raw({ type: '*/*' }),  
+app.use('/api/paystack',
+  express.raw({ type: '*/*' }),
   (req, res, next) => {
-      req.rawBody = req.body;  
-      console.log('Captured Raw Body:', req.rawBody.toString('utf8')); 
-      next(); 
+      req.rawBody = req.body;
+      next();
   },
   paystackroute
 );
@@ -48,6 +42,6 @@ app.use((err, req, res, next) => {
     res.status(500).json({ message: 'Internal Server Error' });
 });
 
-server.listen(PORT, () => {
+app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
