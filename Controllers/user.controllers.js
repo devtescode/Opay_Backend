@@ -254,7 +254,7 @@ module.exports.userlogin = async (req, res) => {
 
 
 module.exports.userLogout = async (req, res) => {
-    console.log("hittttttttttt")
+    // console.log("hittttttttttt")
     try {
         const userId = req.auth?.userId;
         const sessionId = req.auth?.sessionId;
@@ -270,7 +270,7 @@ module.exports.userLogout = async (req, res) => {
             _id: sessionId,
             userId
         });
-        console.log(deletedSession, "delectsessipojmn")
+        // console.log(deletedSession, "delectsessipojmn")
 
         return res.status(200).json({
             status: true,
